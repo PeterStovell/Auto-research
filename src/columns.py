@@ -31,9 +31,6 @@ class Columns(DictConfig):
     def scaling(self):
         return self.get('scaling', [])
 
-    def batch_sampling(self):
-        return self.get('batch_sampling', [])
-
     def output(self):
         return self.get('output', [])
 
@@ -44,8 +41,6 @@ class Columns(DictConfig):
         """
         if self.scaling():
             df[f'scaling_column'] = concat(df[self.scaling()])
-        if self.batch_sampling():
-            df[f'batch_sampling_column'] = concat(df[self.batch_sampling()])
 
     def index(self):
         return [self["date"], self["sequence"]]
@@ -55,6 +50,6 @@ class Columns(DictConfig):
 
     def load_list(self):
         all_cols = self.index() + self.categoricals() \
-                + self.scaling() + self.batch_sampling() \
+                + self.scaling() \
                 + self.numericals() + self.targets()
         return list(dict.fromkeys(all_cols))

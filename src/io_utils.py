@@ -8,14 +8,6 @@ import os
 from glob import glob
 
 
-def next_path(root):
-    pattern = 'version_{}'
-    paths = glob(os.path.join(root, pattern.format('*')))
-    numbers = [-1] + [int(path.split('_')[-1]) for path in paths]
-    next_number = max(numbers) + 1
-    return os.path.join(root, pattern.format(next_number))
-
-
 def exists(path: str) -> bool:
     return fsspec.open(path).fs.exists(path)
 
