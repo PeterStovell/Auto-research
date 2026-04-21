@@ -1,4 +1,3 @@
-import random
 
 import omegaconf
 import pandas as pd
@@ -6,11 +5,12 @@ import torch
 
 from columns import Columns
 from sampler import dataframe_to_sequence_list, SliceDataset
+from encoder import get_encoder
 
 
 def build_dataloaders(cfg: omegaconf.DictConfig):
     print('Loading ', cfg.input_path)
-    columns = Columns(cfg['columns'])  # add helper code
+    columns = Columns(cfg.columns)  # add helper code
     df = pd.read_parquet(cfg.input_path, columns=columns.load_list()).dropna()
     print('Adding auxiliary columns')
     columns.add_auxiliary(df)
@@ -21,7 +21,6 @@ def build_dataloaders(cfg: omegaconf.DictConfig):
     print(df[columns.targets()].lt(1).mean())
 
     print('Encoding and scaling')
-    from encoder import get_encoder
     encoder = get_encoder(columns)
     df_train_val = df.loc[df[columns.date()] < pd.to_datetime(cfg.val_end_date)]
     encoder.fit(df_train_val)
@@ -39,9 +38,6 @@ def build_dataloaders(cfg: omegaconf.DictConfig):
     sequence_list = dataframe_to_sequence_list(df_t, columns)
 
     print("Creating datasets")
-    seed = cfg.get('seed', 0)
-    random.seed(seed)
-    torch.manual_seed(seed)
     train_ds = SliceDataset(sequence_list, length=cfg.seq_len, end_date=cfg.train_end_date)
     print('training samples: ', len(train_ds))
     val_ds = SliceDataset(sequence_list, length=cfg.seq_len, start_date=cfg.train_end_date,

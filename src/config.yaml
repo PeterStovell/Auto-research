@@ -1,37 +1,37 @@
-input_path: gs://demand-vision/quark/jobs/eugene/quark-multi-build-5vh69-08-24-2025/build-control-1.parquet
-query: y_volume_m0 >= 0 and y_volume_m2 >= 0
-train_end_date: '2023-07-01'
-val_end_date: '2024-01-01'
+dataloader:
+  input_path: gs://demand-vision/quark/jobs/eugene/quark-multi-build-5vh69-08-24-2025/build-control-1.parquet
+  query: y_volume_m0 >= 0 and y_volume_m2 >= 0
+  train_end_date: '2023-07-01'
+  val_end_date: '2024-01-01'
+  seq_len: 12
+  batch_size: 512
+  columns:
+    date: Date
+    sequence: sequence
+    categoricals:
+      - Material
+      - Plant
+      - month_of_year
+      - Refinery
+    numericals:
+      - y_volume_m0
+    targets:
+      - y_volume_m2
+    scaling: [Material]
 
-columns:
-  date: Date
-  sequence: sequence
-  categoricals:
-    - Material
-    - Plant
-    - month_of_year
-    - Refinery
-  numericals:
-    - y_volume_m0
-  targets:
-    - y_volume_m2
-  scaling: [Material]
+trainer:
+  max_epochs: 5
+  max_steps_per_epoch: 0  # active if positive
+  patience: 15
+  lr: 0.005
+  weight_decay: 0. # active if positive
+  gamma: 0.9
+  max_norm: 0. # active if positive
+  accelerator: auto
 
-seq_len: 12
-
-batch_size: 512
-max_epochs: 5
-max_steps_per_epoch: 0  # active if positive
-patience: 15
-lr: 0.005
-weight_decay: 0. # active if positive
-gamma: 0.9
-max_norm: 0. # active if positive
-accelerator: auto
-
-model_config:
+model:
+  hidden_dim: 128
   num_layers: 2
   dropout: 0.2
-  hidden_dim: 128
 
 seed: 13

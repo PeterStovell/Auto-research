@@ -1,10 +1,12 @@
 import os
 import argparse
 import sys
+import random
+from omegaconf import DictConfig
 
 import numpy as np
 import torch
-from torch import nn as nn
+from torch import nn
 
 from io_utils import conf_read
 from dataloaders import build_dataloaders
@@ -13,11 +15,7 @@ from torch_utils import get_accelerator
 
 class Model(torch.nn.Module):
 
-    def __init__(self, cat_card:list[int], n_num:int, n_target:int,
-                 hidden_dim:int=64,
-                 num_layers:int=2,
-                 dropout:float=0.25,
-                 ):
+    def __init__(self, cat_card:list[int], n_num:int, n_target:int, cfg: DictConfig):
         super().__init__()
         emb_dims = [int(np.log(card) + 1) for card in cat_card]
         input_dim = sum(emb_dims) + n_num
@@ -25,13 +23,13 @@ class Model(torch.nn.Module):
                                          for card, emb_dim in zip(cat_card, emb_dims)])
         self.lstm = nn.LSTM(
             input_size=input_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
+            hidden_size=cfg.hidden_dim,
+            num_layers=cfg.num_layers,
             batch_first=True,
             bidirectional=False,
-            dropout=dropout,
+            dropout=cfg.dropout,
         )
-        self.linear = nn.Linear(in_features=hidden_dim, out_features=n_target)
+        self.linear = nn.Linear(in_features=cfg.hidden_dim, out_features=n_target)
         self.loss_function = torch.nn.L1Loss()
 
 
@@ -137,17 +135,20 @@ def train_model(
     return metrics
 
 
-if __name__ == '__main__':
+def main():
     print("python", sys.version)
     print("pytorch", torch.__version__)
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_path', default=f'./out/local', help='output path')
     args = parser.parse_args()
-    
+
     config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.yaml")
     cfg = conf_read(config_path)
 
-    train_dataloader, val_dataloader, test_dataloader, cat_card, n_num, n_target = build_dataloaders(cfg)
+    random.seed(cfg.seed)
+    torch.manual_seed(cfg.seed)
+
+    train_dataloader, val_dataloader, test_dataloader, cat_card, n_num, n_target = build_dataloaders(cfg.dataloader)
 
     device = cfg.get('accelerator', 'auto')
     if device == 'auto':
@@ -155,14 +156,18 @@ if __name__ == '__main__':
     print('device:', device)
 
     print("Creating model")
-    model = Model(cat_card, n_num, n_target).to(device)
+    model = Model(cat_card, n_num, n_target, cfg.model).to(device)
 
     os.makedirs(args.output_path, exist_ok=True)
 
     print("Training model")
-    metrics = train_model(model, train_dataloader, val_dataloader, cfg, device, args.output_path)
+    metrics = train_model(model, train_dataloader, val_dataloader, cfg.trainer, device, args.output_path)
     print(metrics)
 
     print("Testing model")
     test_loss = run_epoch_eval(model, test_dataloader, device=device)
     print(f"test_loss={test_loss:.5f}")
+
+
+if __name__ == '__main__':
+    main()
