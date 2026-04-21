@@ -1,0 +1,8 @@
+name: kfp
+channels:
+  - conda-forge
+dependencies:
+  - kfp=1.8.22
+  - fsspec
+  - gcsfs
+  - omegaconf

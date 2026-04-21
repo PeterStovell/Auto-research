@@ -1,0 +1,26 @@
+name: pytorch
+channels:
+  - conda-forge
+dependencies:
+  - fsspec
+  - gcsfs
+  - ipython
+  - ipywidgets
+  - joblib
+  - jupyterlab
+  - lightning
+  - matplotlib
+  - omegaconf
+  - pandas
+  - pandoc
+  - pip
+  - protobuf
+  - psutil
+  - pyarrow
+  - pytest
+  - python=3.11
+  - scikit-learn
+  - scipy
+  - seaborn
+  - tqdm
+  - pytorch::pytorch
