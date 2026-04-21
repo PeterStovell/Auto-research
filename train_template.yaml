@@ -1,0 +1,13 @@
+name: train
+description: train code
+
+outputs:
+- {name: output_path, type: String, description: ''}
+
+implementation:
+  container:
+    image: IMAGE
+    command: [
+      python3, train.py,
+      --output_path, {outputPath: output_path},
+    ]
