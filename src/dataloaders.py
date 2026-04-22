@@ -1,14 +1,14 @@
 
-import omegaconf
 import pandas as pd
 import torch
+from omegaconf import DictConfig
 
 from columns import Columns
 from sampler import dataframe_to_sequence_list, SliceDataset
 from encoder import get_encoder
 
 
-def build_dataloaders(cfg: omegaconf.DictConfig):
+def build_dataloaders(cfg: DictConfig):
     print('Loading ', cfg.input_path)
     columns = Columns(cfg.columns)  # add helper code
     df = pd.read_parquet(cfg.input_path, columns=columns.load_list()).dropna()

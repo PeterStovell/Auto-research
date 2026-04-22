@@ -34,7 +34,7 @@ if __name__ == '__main__':
     run_name = 'test'
     print(experiment_name, '/', run_name)
 
-    cfg = conf_read('src/config.yaml')
+    cfg = conf_read('src/static_config.yaml')
     seeds = [cfg.get('seed', 0)] if args.n_seeds == 1 else range(args.n_seeds)
     for seed in seeds:
         cfg["seed"] = seed
