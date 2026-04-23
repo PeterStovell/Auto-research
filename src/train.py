@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from io_utils import conf_read
+from io_utils import conf_read, conf_write
 from dataloaders import build_dataloaders
 from torch_utils import get_accelerator
 
@@ -182,8 +182,14 @@ def main():
 
     print("Training model")
     metrics = train_model(model, train_dataloader, val_dataloader, device, args.output_path)
-    metrics = pd.DataFrame(metrics).set_index("epoch")
-    print(metrics)
+    metrics = pd.DataFrame(metrics)
+    print(metrics.set_index("epoch"))
+
+    run_summary = {
+        "curve": {k: v.tolist() for k, v in metrics.items()},
+    }
+    run_summary = OmegaConf.create(run_summary)
+    conf_write(run_summary, os.path.join(args.output_path, 'run_summary.yaml'))
 
     print("Testing model")
     test_loss = run_epoch_eval(model, test_dataloader, device=device)
