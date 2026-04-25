@@ -4,8 +4,6 @@ import hashlib
 import json
 from omegaconf import OmegaConf
 from typing import Any
-import os
-from glob import glob
 
 
 def exists(path: str) -> bool:

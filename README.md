@@ -31,9 +31,9 @@ e.g:
 
 Local runs:
 
-    python src/train.py --config_path configs/puk.yaml
+    python src/train.py --output_path out/local
 
 Kubeflow runs:
 
     make pipeline.yaml
-    conda run -n kfp python run.py configs/puk.yaml
+    conda run -n kfp python run.py

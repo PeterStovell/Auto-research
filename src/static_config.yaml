@@ -1,8 +1,6 @@
 dataloader:
   input_path: gs://demand-vision/quark/jobs/eugene/quark-multi-build-5vh69-08-24-2025/build-control-1.parquet
   query: y_volume_m0 >= 0 and y_volume_m2 >= 0
-  train_end_date: '2023-07-01'
-  val_end_date: '2024-01-01'
   columns:
     date: Date
     sequence: sequence
@@ -16,5 +14,8 @@ dataloader:
     targets:
       - y_volume_m2
     scaling: [Material]
+  train_end_date: '2023-07-01'
+  val_end_date: '2024-01-01'
+  seq_len: 12
 
 seed: 13

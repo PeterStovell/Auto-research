@@ -12,75 +12,93 @@ from torch import nn
 from io_utils import conf_read, conf_write
 from dataloaders import build_dataloaders
 from torch_utils import get_accelerator
+from plot_utils import plot_curves
 
 
 @dataclass
 class DataLoaderConfig:
-  seq_len: int = 12
-  batch_size: int = 512
+    batch_size: int = 512
 
 
 @dataclass
 class TrainerConfig:
-  max_epochs: int =  5
-  patience: int = 15
-  lr: float = 0.005
-  weight_decay: float = 0. # active if positive
-  gamma: float = 0.9
-  max_norm: float = 0. # active if positive
+    max_epochs: int = 100
+    patience: int = 15
+    lr: float = 0.001
+    weight_decay: float = 1e-4
+    gamma: float = 0.95
+    max_norm: float = 0.
 
 
 @dataclass
 class ModelConfig:
-  hidden_dim: int = 128
-  num_layers: int = 2
-  dropout: float = 0.2
+    hidden_dim: int = 128
+    num_layers: int = 2
+    dropout: float = 0.2
+    use_weighted_loss: bool = True  # NEW
 
 
 class Model(torch.nn.Module):
 
-    def __init__(self, cat_card:list[int], n_num:int, n_target:int):
+    def __init__(self, cat_card: list[int], n_num: int, n_target: int):
         super().__init__()
         emb_dims = [int(np.log(card) + 1) for card in cat_card]
         input_dim = sum(emb_dims) + n_num
-        self.embeddings = nn.ModuleList([nn.Embedding(card, emb_dim)
-                                         for card, emb_dim in zip(cat_card, emb_dims)])
-        self.lstm = nn.LSTM(
-            input_size=input_dim,
-            hidden_size=ModelConfig.hidden_dim,
-            num_layers=ModelConfig.num_layers,
-            batch_first=True,
-            bidirectional=False,
-            dropout=ModelConfig.dropout,
-        )
-        self.linear = nn.Linear(in_features=ModelConfig.hidden_dim, out_features=n_target)
-        self.loss_function = torch.nn.L1Loss()
 
+        self.embeddings = nn.ModuleList([
+            nn.Embedding(card, emb_dim)
+            for card, emb_dim in zip(cat_card, emb_dims)
+        ])
+
+        self.input_proj = nn.Linear(input_dim, ModelConfig.hidden_dim)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=ModelConfig.hidden_dim,
+            nhead=8,
+            dim_feedforward=ModelConfig.hidden_dim * 2,
+            dropout=ModelConfig.dropout,
+            batch_first=True,
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=ModelConfig.num_layers)
+        self.linear = nn.Linear(ModelConfig.hidden_dim, n_target)
 
     def forward(self, cat, num):
-        """
-        cat: tensor of indices, shape = [batch_size, seq_len, n_cat] with n_cat = len(cat_card)
-        num: tensor of floats, shape = [batch_size, seq_len, n_num]
-
-        Note that the batch dimension is optional
-        """
-
-        # embedding of categories
         x = [emb(cat[..., i]) for i, emb in enumerate(self.embeddings)]
-        # concatenate embeddings and numerical values along last axis
-        x = torch.cat(x + [num], dim=-1)  # shape is [batch_size, seq_len, input_dim]
-        y, _ = self.lstm(x)  # shape is [batch_size, seq_len, hidden_dim]
-        y = self.linear(y)  # shape is [batch_size, seq_len, n_target]
+        x = torch.cat(x + [num], dim=-1)
+
+        y = self.input_proj(x)
+        mask = nn.Transformer.generate_square_subsequent_mask(y.size(1), device=y.device)
+        y = self.transformer(y, mask=mask, is_causal=True)
+        y = self.linear(y)
         y = nn.functional.softplus(y)
         return y
 
-    def compute_loss(self, batch, device):
+    def compute_train_loss(self, batch, device):
         date, seq, cat, num, target = batch
         cat, num, target = cat.to(device), num.to(device), target.to(device)
+
         pred = self(cat, num)
+
+        # TRAINING loss (new)
+        loss = torch.abs(pred - target)
+
+        if ModelConfig.use_weighted_loss:
+            T = loss.size(1)
+            weights = torch.linspace(0.2, 1.0, steps=T, device=loss.device)
+            weights = weights.view(1, T, 1)
+            loss = loss * weights
+
+        return loss.mean()
+
+    def compute_eval_loss(self, batch, device):
+        date, seq, cat, num, target = batch
+        cat, num, target = cat.to(device), num.to(device), target.to(device)
+
+        pred = self(cat, num)
+
+        # ORIGINAL metric (unchanged)
         pred = pred[:, -1, :]
         target = target[:, -1, :]
-        loss = self.loss_function(pred, target)
+        loss = torch.nn.functional.l1_loss(pred, target)
         return loss
 
 
@@ -88,15 +106,21 @@ def run_epoch_train(model, dataloader, optimizer, device):
     total_loss = 0.
     n = 0
     model.train()
+
     for batch in dataloader:
-        loss = model.compute_loss(batch, device=device)
+        loss = model.compute_train_loss(batch, device=device)
+
         optimizer.zero_grad()
         loss.backward()
+
         if TrainerConfig.max_norm > 0.:
             torch.nn.utils.clip_grad_norm_(model.parameters(), TrainerConfig.max_norm)
+
         optimizer.step()
+
         total_loss += loss.item()
         n += 1
+
     return total_loss / max(n, 1)
 
 
@@ -104,11 +128,13 @@ def run_epoch_eval(model, dataloader, device='cpu'):
     total_loss = 0.
     n = 0
     model.eval()
+
     with torch.no_grad():
         for batch in dataloader:
-            loss = model.compute_loss(batch, device=device)
+            loss = model.compute_eval_loss(batch, device=device)
             total_loss += loss.item()
             n += 1
+
     return total_loss / max(n, 1)
 
 
@@ -120,27 +146,45 @@ def train_model(
     output_path,
 ):
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=TrainerConfig.lr, weight_decay=TrainerConfig.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=TrainerConfig.gamma)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=TrainerConfig.lr,
+        weight_decay=TrainerConfig.weight_decay
+    )
+
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer,
+        gamma=TrainerConfig.gamma
+    )
 
     best_val = float("inf")
     patience_left = TrainerConfig.patience
     best_path = os.path.join(output_path, "best_model.pt")
+
     metrics = []
+
     for epoch in range(TrainerConfig.max_epochs):
+
         train_loss = run_epoch_train(model, train_loader, optimizer, device)
         val_loss = run_epoch_eval(model, val_loader, device)
-        last_lr = scheduler.get_last_lr()[0]
+
         scheduler.step()
+        last_lr = scheduler.get_last_lr()[0]
+
         print(
             f"Epoch {epoch:02d} | "
             f"train_loss={train_loss:.5f} "
             f"val_loss={val_loss:.5f} "
             f"lr={last_lr:.2e}"
         )
+
         metrics.append({
-            "epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, "lr": last_lr,
+            "epoch": epoch,
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+            "lr": last_lr,
         })
+
         if val_loss < best_val:
             print('*')
             best_val = val_loss
@@ -159,18 +203,24 @@ def train_model(
 def main():
     print("python", sys.version)
     print("pytorch", torch.__version__)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_path', default=f'./out/local', help='output path')
     args = parser.parse_args()
 
-    config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "static_config.yaml")
+    config_path = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "static_config.yaml"
+    )
     cfg = conf_read(config_path)
 
     random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
 
     dataloader_config = OmegaConf.merge(cfg.dataloader, DataLoaderConfig)
-    train_dataloader, val_dataloader, test_dataloader, cat_card, n_num, n_target = build_dataloaders(dataloader_config)
+
+    train_dataloader, val_dataloader, test_dataloader, cat_card, n_num, n_target = \
+        build_dataloaders(dataloader_config)
 
     device = get_accelerator()
     print('device:', device)
@@ -182,18 +232,27 @@ def main():
 
     print("Training model")
     metrics = train_model(model, train_dataloader, val_dataloader, device, args.output_path)
+
     metrics = pd.DataFrame(metrics)
-    print(metrics.set_index("epoch"))
+    metrics_indexed = metrics.set_index("epoch")
+    # print(metrics_indexed)
 
     run_summary = {
+        "min_val_loss": float(metrics["val_loss"].min()),
+        "min_epoch": int(metrics_indexed["val_loss"].idxmin()),
         "curve": {k: v.tolist() for k, v in metrics.items()},
     }
     run_summary = OmegaConf.create(run_summary)
     conf_write(run_summary, os.path.join(args.output_path, 'run_summary.yaml'))
 
-    print("Testing model")
+    plot_curves(run_summary, os.path.join(args.output_path, 'curves.png'))
+
     test_loss = run_epoch_eval(model, test_dataloader, device=device)
-    print(f"test_loss={test_loss:.5f}")
+
+    print("\nSummary:")
+    print(f"  min_val_loss={run_summary.min_val_loss:.5f}  (epoch {run_summary.min_epoch} / {TrainerConfig.max_epochs})")
+    print(f"  test_loss   ={test_loss:.5f}")
+    print(f"  output      ={args.output_path}")
 
 
 if __name__ == '__main__':

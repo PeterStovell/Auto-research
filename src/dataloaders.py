@@ -12,6 +12,12 @@ def build_dataloaders(cfg: DictConfig):
     print('Loading ', cfg.input_path)
     columns = Columns(cfg.columns)  # add helper code
     df = pd.read_parquet(cfg.input_path, columns=columns.load_list()).dropna()
+    if "query" in cfg:
+        print("query:", cfg.query)
+        before = len(df)
+        df = df.query(cfg.query)
+        after = len(df)
+        print(f"dataset reduced by {1 - after / before : .2%}")
     print('Adding auxiliary columns')
     columns.add_auxiliary(df)
     print('shape:', df.shape)
