@@ -1,7 +1,6 @@
 import random
 from datetime import datetime
 import pandas as pd
-from tqdm import tqdm
 import torch
 from columns import Columns
 
@@ -26,8 +25,8 @@ def dataframe_to_sequence_list(df: pd.DataFrame, columns: Columns) -> list[dict]
     The list of sequences facilitates the data access for the torch dataset.
     """
     sequence_list = []
-    for sequence_index, sequence_df in tqdm(df.sort_values(columns.date()).groupby(
-            columns.sequence(), observed=True)):
+    for sequence_index, sequence_df in df.sort_values(columns.date()).groupby(
+            columns.sequence(), observed=True):
         sequence = {
             'date': sequence_df[columns.date()].to_list(),
             'sequence': sequence_index,
