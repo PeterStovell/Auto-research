@@ -1,13 +1,17 @@
+import json
 import argparse
 import os
 import sys
 import tarfile
 import tempfile
-
 import fsspec
 import kfp
 
-from src.io_utils import conf_read, json_read
+
+def json_read(path: str):
+    with open(path) as f:
+        return json.load(f)
+
 
 if __name__ == '__main__':
     print("python", sys.version)
