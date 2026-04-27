@@ -36,23 +36,29 @@ Suppose you want to run an experiment named "tcn_bz256".
 
 After modifying `train.py` you run the experiment locally or on kubeflow:
 
-Local experiment:
+Local run:
 
 ```bash
 python src/train.py --output out/local/{experiment_name}
-```
-
-Kubeflow experiment:
-
-```bash
-make pipeline.yaml
-conda run -n kfp python run_kfp.py --output gs://demand-vision/temp/marc/runs/{experiment_name}
 ```
 
 To cap training epochs (e.g. for a quick smoke test):
 
 ```bash
 python src/train.py --output out/local/{experiment_name} --max_epochs 5
+```
+
+Kubeflow run:
+
+```bash
+make pipeline.yaml
+conda run -n kfp python run_kfp.py --output gs://demand-vision/temp/marc/runs/{experiment_name}
+```
+
+To check the status of the Kubeflow run:
+
+```bash
+conda run -n kfp python get_kfp.py --run_id {run_id}
 ```
 
 If the run completes successfully, the output directory will contain:

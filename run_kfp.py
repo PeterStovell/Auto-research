@@ -35,7 +35,6 @@ if __name__ == '__main__':
         with fsspec.open(code_uri, 'wb') as f_out:
             f_out.write(f_in.read())
     os.unlink(tmp_path)
-    print(f"code     -> {code_uri}")
 
     # Upload config
     # config_uri = f"{args.output}/config.yaml"
@@ -43,8 +42,6 @@ if __name__ == '__main__':
     #     with fsspec.open(config_uri, 'wb') as f_out:
     #         f_out.write(f_in.read())
     # print(f"config   -> {config_uri}")
-
-    print(f"output   -> {args.output}")
 
     kfp_cfg = json_read(os.path.expanduser('~/.config/kfp/client.json'))
     client = kfp.Client(**kfp_cfg)
@@ -59,4 +56,4 @@ if __name__ == '__main__':
         },
         experiment_name=experiment_name,
     )
-    print(run)
+    print(f"run_id={run.run_id}")
