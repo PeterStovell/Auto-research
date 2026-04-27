@@ -1,6 +1,5 @@
 from typing import Callable
 
-from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from copy import deepcopy
@@ -47,14 +46,14 @@ class GroupScaler:
         self.scaler = {}
 
     def fit(self, df: pd.DataFrame):
-        for index, group in tqdm(df.groupby(self.group_column, observed=True)):
+        for index, group in df.groupby(self.group_column, observed=True):
             self.scaler[index] = deepcopy(self.transformer)
             self.scaler[index].fit(group[self.value_columns])
         return self
 
     def transform(self, df: pd.DataFrame, inverse=False):
         out = []
-        for index, group in tqdm(df.groupby(self.group_column, observed=True)):
+        for index, group in df.groupby(self.group_column, observed=True):
             if inverse:
                 func = self.scaler[index].inverse_transform
             else:

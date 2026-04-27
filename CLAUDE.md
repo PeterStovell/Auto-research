@@ -14,33 +14,24 @@ conda activate pytorch
 
 Kubeflow credentials go in `~/.config/kfp/client.json` (see README.md for the schema).
 
-## Running Training
+## Run training 
 
-Local run:
+Train locally:
 ```bash
-cd src && python train.py --output_path ../out/local
+python src/train.py --config configs/puk_monthly_fast.yaml --output out/local/puk_monthly_fast
 ```
 
-Config is read from `src/static_config.yaml` (hardcoded path relative to `train.py`). Outputs — model checkpoint, metrics, run summary — are written to `--output_path`.
-
-Run tests:
+Train on kubeflow:
 ```bash
-cd src && pytest
+make pipeline.yaml
+conda run -n kfp python run_kfp.py --config configs/puk_monthly_fast.yaml --output gs://demand-vision/temp/marc/runs/puk_monthly_fast
 ```
+For safety, always use gs://demand-vision/temp/marc as the root for output.
 
-## Kubeflow Deployment
+Download kubeflow experiments locally:
 
 ```bash
-make image          # build & push Docker image, writes digest to ./image
-make pipeline.yaml  # compiles the KFP pipeline
-./run.sh configs/puk.yaml   # submit a run
-```
-
-`Makefile` chains these: `pipeline.yaml` depends on `train.yaml` which depends on `image`. The compiled `pipeline.yaml` is submitted via `pipeline.py` using the `kfp` (v1) SDK.
-
-To download completed run artifacts locally:
-```bash
-conda run -n kfp python download.py <experiment_name> <output_path>
+gcloud storage rsync gs://demand-vision/temp/marc/runs out/kfp --recursive
 ```
 
 ## Architecture
@@ -48,7 +39,7 @@ conda run -n kfp python download.py <experiment_name> <output_path>
 The pipeline is a standard supervised time-series forecasting loop:
 
 ```
-static_config.yaml
+config.yaml
       │
       ▼
 dataloaders.py (build_dataloaders)
@@ -69,4 +60,3 @@ train.py — Model (LSTM + embeddings), training loop, early stopping, writes ru
 - The `Model` in `train.py` embeds categoricals (embedding dim = `floor(log(cardinality)) + 1`), concatenates with numericals, passes through a unidirectional LSTM, then a LayerNorm and linear head with softplus output (forces non-negative predictions). Training loss uses sequence-weighted MAE (later timesteps weighted higher); eval loss uses last-timestep MAE only.
 - Config is managed via OmegaConf. `DataLoaderConfig`, `TrainerConfig`, and `ModelConfig` are Python dataclasses used as defaults and merged with the YAML config.
 - `io_utils.py` wraps all I/O through `fsspec`, so paths can be local or GCS (`gs://...`) transparently.
-- The Docker image (`FROM pytorch/pytorch`) copies only `src/` and runs `train.py` directly. The Kubeflow component YAML (`train_template.yaml`) has `IMAGE` substituted by `make`.

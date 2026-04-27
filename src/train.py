@@ -155,8 +155,8 @@ def main():
     print("pytorch", torch.__version__)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', required=True)
-    parser.add_argument('--output_path', default='./out/local')
+    parser.add_argument('--config', required=True, help='path to config file')
+    parser.add_argument('--output', required=True, help='path to output folder')
     args = parser.parse_args()
 
     cfg = conf_read(args.config)
@@ -173,10 +173,10 @@ def main():
     print("Creating model")
     model = Model(cat_card, n_num, n_target, cfg=cfg.model).to(device)
 
-    os.makedirs(args.output_path, exist_ok=True)
+    os.makedirs(args.output, exist_ok=True)
 
     print("Training model")
-    metrics = train_model(model, train_dataloader, val_dataloader, cfg.trainer, device, args.output_path)
+    metrics = train_model(model, train_dataloader, val_dataloader, cfg.trainer, device, args.output)
 
     metrics = pd.DataFrame(metrics)
     metrics_indexed = metrics.set_index("epoch")
@@ -187,16 +187,16 @@ def main():
         "curve": {k: v.tolist() for k, v in metrics.items()},
     }
     run_summary = OmegaConf.create(run_summary)
-    conf_write(run_summary, os.path.join(args.output_path, 'run_summary.yaml'))
+    conf_write(run_summary, os.path.join(args.output, 'run_summary.yaml'))
 
-    plot_curves(run_summary, os.path.join(args.output_path, 'curves.png'))
+    plot_curves(run_summary, os.path.join(args.output, 'curves.png'))
 
     test_loss = run_epoch_eval(model, test_dataloader, device=device)
 
     print("\nSummary:")
     print(f"  min_val_loss={run_summary.min_val_loss:.5f}  (epoch {run_summary.min_epoch} / {cfg.trainer.max_epochs})")
     print(f"  test_loss   ={test_loss:.5f}")
-    print(f"  output      ={args.output_path}")
+    print(f"  output      ={args.output}")
 
 
 if __name__ == '__main__':
