@@ -29,32 +29,57 @@ example content:
 
 ## Running an experiment
 
+Suppose you want to run the experiment named "tcn_bz256" on the config named "puk_monthly".
+
+After modifying the code and config you run the experiment locally or on kubeflow:
+
 Local experiment:
 
 ```bash
-python src/train.py --config configs/puk_monthly.yaml --output out/local/puk_monthly/v1
+python src/train.py --config configs/{config_name}.yaml --output out/local/{config_name}/{experiment_name}
 ```
 
 Kubeflow experiment:
 
 ```bash
 make pipeline.yaml
-conda run -n kfp python run_kfp.py --config configs/puk_monthly.yaml --output gs://demand-vision/temp/marc/runs/puk_monthly/v1
-```
-
-Download kubeflow results locally:
-
-```bash
+conda run -n kfp python run_kfp.py --config configs/{config_name}.yaml --output gs://demand-vision/temp/marc/runs/{config_name}/{experiment_name}
+# wait for job completion
 gcloud storage rsync gs://demand-vision/temp/marc/runs out/kfp --recursive
 ```
 
-## Experiment result
+If the run completes successfully, the output directory will contain:
 
-The experiment results are found in the `output` directory:
+- `best_model.pt`
+- `curves.png`
+- `run_summary.yaml` : the run metrics and training curves data
+- `train.log` (kfp only)
 
-- best_model.pt
-- curves.png
-- run_summary.yaml : the run metrics and training curves data
+The format of `run_summary.yaml` is the following:
+
+```
+best_val_loss: 0.08469399453939072
+best_epoch: 1
+curve:
+  epoch:
+  - 0
+  - 1
+  - 2
+  train_loss:
+  - 0.07017532611093201
+  - 0.05582243474289632
+  - 0.053720542964653464
+  val_loss:
+  - 0.08631508484748858
+  - 0.08469399453939072
+  - 0.08501925701940698
+  lr:
+  - 0.0045000000000000005
+  - 0.004050000000000001
+  - 0.0036450000000000007
+```
+
+If the run summary is not present, the training script crashed, and you can read the log for information.
 
 
 ## Architecture

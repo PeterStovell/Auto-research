@@ -182,8 +182,9 @@ def main():
     metrics_indexed = metrics.set_index("epoch")
 
     run_summary = {
-        "min_val_loss": float(metrics["val_loss"].min()),
-        "min_epoch": int(metrics_indexed["val_loss"].idxmin()),
+        "best_val_loss": float(metrics["val_loss"].min()),
+        "best_epoch": int(metrics_indexed["val_loss"].idxmin()),
+        "max_epochs": cfg.max_epochs,
         "curve": {k: v.tolist() for k, v in metrics.items()},
     }
     run_summary = OmegaConf.create(run_summary)
@@ -191,12 +192,12 @@ def main():
 
     plot_curves(run_summary, os.path.join(args.output, 'curves.png'))
 
-    test_loss = run_epoch_eval(model, test_dataloader, device=device)
-
-    print("\nSummary:")
-    print(f"  min_val_loss={run_summary.min_val_loss:.5f}  (epoch {run_summary.min_epoch} / {cfg.trainer.max_epochs})")
-    print(f"  test_loss   ={test_loss:.5f}")
-    print(f"  output      ={args.output}")
+    # test_loss = run_epoch_eval(model, test_dataloader, device=device)
+    #
+    # print("\nSummary:")
+    # print(f"  best_val_loss={run_summary.min_val_loss:.5f}  (epoch {run_summary.min_epoch} / {cfg.trainer.max_epochs})")
+    # print(f"  test_loss   ={test_loss:.5f}")
+    # print(f"  output      ={args.output}")
 
 
 if __name__ == '__main__':
