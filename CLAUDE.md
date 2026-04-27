@@ -11,7 +11,6 @@ Our objective is to improve on our current Pytorch model (see `train.py`) and lo
 ## Experimentation
 
 **What you CAN do:**
-- Inside `configs/*.yaml` modify dataloader.batch_size, trainer.* and model.*
 - Inside `train.py` modify everything except the function `compute_eval_loss`
 
 **What you CANNOT do:**
@@ -27,16 +26,11 @@ Our objective is to improve on our current Pytorch model (see `train.py`) and lo
 
 ## The experiment loop
 
-The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autoresearch/mar5-gpu0`).
-
-During the experiment loop, the dataloaders are fixed and defined by the dataloader section of the config. 
-Ask the user for the initial config.
-
 LOOP FOREVER:
 
-1. Implement an experimental idea by directly changing train.py and the config
+1. Implement an experimental idea by directly changing train.py
 2. Pick a short experiment name e.g. "tcn_bz256"
-3. Run the experiment on kubeflow using the config name and experiment name
+3. Run the experiment on kubeflow using experiment name
 4. Analyse the results, decide if you keep the experiment or roll it back
 
 The first experiment should be the baseline (name: baseline, no changes to the repo).
