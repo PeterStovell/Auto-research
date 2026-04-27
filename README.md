@@ -26,24 +26,27 @@ example content:
         "namespace": "marc"
     }
 
+## Data
+
+The data and dataloaders are fixed and configured by `dataloaders.yaml`.
 
 ## Running an experiment
 
-Suppose you want to run the experiment named "tcn_bz256" on the config named "puk_monthly".
+Suppose you want to run an experiment named "tcn_bz256".
 
-After modifying the code and config you run the experiment locally or on kubeflow:
+After modifying `train.py` you run the experiment locally or on kubeflow:
 
 Local experiment:
 
 ```bash
-python src/train.py --config configs/{config_name}.yaml --output out/local/{config_name}/{experiment_name}
+python src/train.py --output out/local/{experiment_name}
 ```
 
 Kubeflow experiment:
 
 ```bash
 make pipeline.yaml
-conda run -n kfp python run_kfp.py --config configs/{config_name}.yaml --output gs://demand-vision/temp/marc/runs/{config_name}/{experiment_name}
+conda run -n kfp python run_kfp.py --output gs://demand-vision/temp/marc/runs/{experiment_name}
 ```
 
 If the run completes successfully, the output directory will contain:
@@ -85,8 +88,8 @@ If the run summary is not present, the training script crashed, and you can read
 The pipeline is a standard supervised time-series forecasting loop:
 
 ```
-config.yaml
-      │
+dataloaders.yaml
+      │ 
       ▼
 dataloaders.py (build_dataloaders)
   ├── columns.py    — typed accessor for column config (date, sequence, categoricals, numericals, targets, scaling)

@@ -1,14 +1,14 @@
-
 import pandas as pd
 import torch
-from omegaconf import DictConfig
 
 from columns import Columns
 from sampler import dataframe_to_sequence_list, SliceDataset
 from encoder import get_encoder
+from utils import conf_read
 
 
-def build_dataloaders(cfg: DictConfig):
+def build_dataloaders(batch_size):
+    cfg = conf_read(__file__.replace('.py', '.yaml'))
     print('Loading ', cfg.input_path)
     columns = Columns(cfg.columns)  # add helper code
     df = pd.read_parquet(cfg.input_path, columns=columns.load_list()).dropna()
@@ -53,13 +53,13 @@ def build_dataloaders(cfg: DictConfig):
     print('test samples: ', len(test_ds))
 
     train_dataloader = torch.utils.data.DataLoader(
-        train_ds, batch_size=cfg.batch_size, shuffle=True, drop_last=False, num_workers=0,
+        train_ds, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=0,
     )
     val_dataloader = torch.utils.data.DataLoader(
-        val_ds, batch_size=cfg.batch_size, shuffle=False, drop_last=False, num_workers=0,
+        val_ds, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=0,
     )
     test_dataloader = torch.utils.data.DataLoader(
-        test_ds, batch_size=cfg.batch_size, shuffle=False, drop_last=False, num_workers=0,
+        test_ds, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=0,
     )
 
     cat_card = [df[c].nunique() for c in columns.categoricals()]

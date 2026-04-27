@@ -4,14 +4,33 @@ import sys
 import random
 import pandas as pd
 import numpy as np
+from dataclasses import dataclass
 from omegaconf import OmegaConf
 import torch
 from torch import nn
 
-from io_utils import conf_read, conf_write
+from utils import conf_read, conf_write, get_accelerator, plot_curves
 from dataloaders import build_dataloaders
-from torch_utils import get_accelerator
-from plot_utils import plot_curves
+
+
+@dataclass
+class TrainerConfig:
+    batch_size: int = 512
+    lr: float = 0.005
+    patience: int = 15
+    max_epochs: int = 50
+    gamma: float = 0.9
+    weight_decay: float = 0.0
+    max_norm: float = 0.0
+
+
+@dataclass
+class ModelConfig:
+    hidden_dim: int = 128
+    num_layers: int = 2
+    dropout: float = 0.4
+    use_weighted_loss: bool = False
+    train_on_last: bool = True  # only train the model on the last time step in the sequence
 
 
 class Model(torch.nn.Module):
@@ -155,28 +174,34 @@ def main():
     print("pytorch", torch.__version__)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', required=True, help='path to config file')
     parser.add_argument('--output', required=True, help='path to output folder')
+    parser.add_argument('--max_epochs', type=int, default=None, help='override max_epochs in trainer config')
     args = parser.parse_args()
 
-    cfg = conf_read(args.config)
+    seed = 10
+    trainer_cfg = OmegaConf.structured(TrainerConfig())
+    model_cfg = OmegaConf.structured(ModelConfig())
 
-    random.seed(cfg.seed)
-    torch.manual_seed(cfg.seed)
+    if args.max_epochs is not None:
+        trainer_cfg.max_epochs = args.max_epochs
 
-    train_dataloader, val_dataloader, test_dataloader, cat_card, n_num, n_target = \
-        build_dataloaders(cfg.dataloader)
+    random.seed(seed)
+    torch.manual_seed(seed)
 
-    device = get_accelerator()
+    train_dataloader, val_dataloader, test_dataloader, cat_card, n_num, n_target = (
+        build_dataloaders(trainer_cfg.batch_size)
+    )
+
+    device = get_accelerator(torch)
     print('device:', device)
 
     print("Creating model")
-    model = Model(cat_card, n_num, n_target, cfg=cfg.model).to(device)
+    model = Model(cat_card, n_num, n_target, cfg=model_cfg).to(device)
 
     os.makedirs(args.output, exist_ok=True)
 
     print("Training model")
-    metrics = train_model(model, train_dataloader, val_dataloader, cfg.trainer, device, args.output)
+    metrics = train_model(model, train_dataloader, val_dataloader, trainer_cfg, device, args.output)
 
     metrics = pd.DataFrame(metrics)
     metrics_indexed = metrics.set_index("epoch")
@@ -184,7 +209,7 @@ def main():
     run_summary = {
         "best_val_loss": float(metrics["val_loss"].min()),
         "best_epoch": int(metrics_indexed["val_loss"].idxmin()),
-        "max_epochs": cfg.max_epochs,
+        "max_epochs": trainer_cfg.max_epochs,
         "curve": {k: v.tolist() for k, v in metrics.items()},
     }
     run_summary = OmegaConf.create(run_summary)
@@ -198,6 +223,7 @@ def main():
     # print(f"  best_val_loss={run_summary.min_val_loss:.5f}  (epoch {run_summary.min_epoch} / {cfg.trainer.max_epochs})")
     # print(f"  test_loss   ={test_loss:.5f}")
     # print(f"  output      ={args.output}")
+    print(f"output={args.output}")
 
 
 if __name__ == '__main__':

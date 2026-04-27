@@ -12,13 +12,13 @@ from src.io_utils import conf_read, json_read
 if __name__ == '__main__':
     print("python", sys.version)
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', required=True, help='path to config file')
+    # parser.add_argument('--config', required=True, help='path to config file')
     parser.add_argument('--output', required=True, help='path to output folder on gcs')
     args = parser.parse_args()
     assert args.output.startswith("gs://demand-vision/temp/marc")  # for safety
 
-    cfg = conf_read(args.config)
-    experiment_name = os.path.basename(args.config).split('.')[0]
+    # cfg = conf_read(args.config)
+    experiment_name = "auto-research"
     run_name = os.path.basename(args.output)
 
     # Package src/ and upload
@@ -34,11 +34,11 @@ if __name__ == '__main__':
     print(f"code     -> {code_uri}")
 
     # Upload config
-    config_uri = f"{args.output}/config.yaml"
-    with open(args.config, 'rb') as f_in:
-        with fsspec.open(config_uri, 'wb') as f_out:
-            f_out.write(f_in.read())
-    print(f"config   -> {config_uri}")
+    # config_uri = f"{args.output}/config.yaml"
+    # with open(args.config, 'rb') as f_in:
+    #     with fsspec.open(config_uri, 'wb') as f_out:
+    #         f_out.write(f_in.read())
+    # print(f"config   -> {config_uri}")
 
     print(f"output   -> {args.output}")
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         run_name=run_name,
         arguments={
             'code_uri': code_uri,
-            'config_uri': config_uri,
+            # 'config_uri': config_uri,
             'output_path': args.output,
         },
         experiment_name=experiment_name,

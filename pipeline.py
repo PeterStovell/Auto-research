@@ -6,12 +6,10 @@ train_component = components.load_component_from_file('train.yaml')
 @dsl.pipeline(name='train', description='A simple Kubeflow pipeline running train.py')
 def my_pipeline(
     code_uri: str,
-    config_uri: str,
     output_path: str,
 ):
     train_op = train_component(
         code_uri=code_uri,
-        config_uri=config_uri,
         output_path=output_path,
     )
     train_op.set_gpu_limit(1)
