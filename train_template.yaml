@@ -1,13 +1,20 @@
 name: train
 description: train code
 
-outputs:
-- {name: output_path, type: String, description: ''}
+inputs:
+- {name: code_uri,    type: String, description: 'GCS URI of src.tar.gz'}
+- {name: config_uri,  type: String, description: 'GCS URI of experiment config yaml'}
+- {name: output_path, type: String, description: 'GCS output path'}
 
 implementation:
   container:
     image: IMAGE
-    command: [
-      python3, train.py,
-      --output_path, {outputPath: output_path},
-    ]
+    command:
+      - python3
+      - entrypoint.py
+      - --code_uri
+      - {inputValue: code_uri}
+      - --config_uri
+      - {inputValue: config_uri}
+      - --output_path
+      - {inputValue: output_path}

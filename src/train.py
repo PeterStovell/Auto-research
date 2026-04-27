@@ -5,7 +5,6 @@ import random
 import pandas as pd
 import numpy as np
 from omegaconf import OmegaConf
-from dataclasses import dataclass
 import torch
 from torch import nn
 
@@ -15,33 +14,11 @@ from torch_utils import get_accelerator
 from plot_utils import plot_curves
 
 
-@dataclass
-class DataLoaderConfig:
-    batch_size: int = 512
-
-
-@dataclass
-class TrainerConfig:
-    max_epochs: int = 100
-    patience: int = 15
-    lr: float = 0.001
-    weight_decay: float = 1e-4
-    gamma: float = 0.95
-    max_norm: float = 0.
-
-
-@dataclass
-class ModelConfig:
-    hidden_dim: int = 128
-    num_layers: int = 2
-    dropout: float = 0.2
-    use_weighted_loss: bool = True  # NEW
-
-
 class Model(torch.nn.Module):
 
-    def __init__(self, cat_card: list[int], n_num: int, n_target: int):
+    def __init__(self, cat_card: list[int], n_num: int, n_target: int, cfg):
         super().__init__()
+        self.cfg = cfg
         emb_dims = [int(np.log(card) + 1) for card in cat_card]
         input_dim = sum(emb_dims) + n_num
 
@@ -49,17 +26,16 @@ class Model(torch.nn.Module):
             nn.Embedding(card, emb_dim)
             for card, emb_dim in zip(cat_card, emb_dims)
         ])
-
-        self.input_proj = nn.Linear(input_dim, ModelConfig.hidden_dim)
+        self.input_proj = nn.Linear(input_dim, cfg.hidden_dim)
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=ModelConfig.hidden_dim,
-            nhead=8,
-            dim_feedforward=ModelConfig.hidden_dim * 2,
-            dropout=ModelConfig.dropout,
+            d_model=cfg.hidden_dim,
+            nhead=cfg.nhead,
+            dim_feedforward=cfg.hidden_dim * 2,
+            dropout=cfg.dropout,
             batch_first=True,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=ModelConfig.num_layers)
-        self.linear = nn.Linear(ModelConfig.hidden_dim, n_target)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=cfg.num_layers)
+        self.linear = nn.Linear(cfg.hidden_dim, n_target)
 
     def forward(self, cat, num):
         x = [emb(cat[..., i]) for i, emb in enumerate(self.embeddings)]
@@ -69,22 +45,18 @@ class Model(torch.nn.Module):
         mask = nn.Transformer.generate_square_subsequent_mask(y.size(1), device=y.device)
         y = self.transformer(y, mask=mask, is_causal=True)
         y = self.linear(y)
-        y = nn.functional.softplus(y)
-        return y
+        return nn.functional.softplus(y)
 
     def compute_train_loss(self, batch, device):
         date, seq, cat, num, target = batch
         cat, num, target = cat.to(device), num.to(device), target.to(device)
 
         pred = self(cat, num)
-
-        # TRAINING loss (new)
         loss = torch.abs(pred - target)
 
-        if ModelConfig.use_weighted_loss:
+        if self.cfg.use_weighted_loss:
             T = loss.size(1)
-            weights = torch.linspace(0.2, 1.0, steps=T, device=loss.device)
-            weights = weights.view(1, T, 1)
+            weights = torch.linspace(0.2, 1.0, steps=T, device=loss.device).view(1, T, 1)
             loss = loss * weights
 
         return loss.mean()
@@ -92,17 +64,13 @@ class Model(torch.nn.Module):
     def compute_eval_loss(self, batch, device):
         date, seq, cat, num, target = batch
         cat, num, target = cat.to(device), num.to(device), target.to(device)
-
         pred = self(cat, num)
-
-        # ORIGINAL metric (unchanged)
         pred = pred[:, -1, :]
         target = target[:, -1, :]
-        loss = torch.nn.functional.l1_loss(pred, target)
-        return loss
+        return torch.nn.functional.l1_loss(pred, target)
 
 
-def run_epoch_train(model, dataloader, optimizer, device):
+def run_epoch_train(model, dataloader, optimizer, trainer_cfg, device):
     total_loss = 0.
     n = 0
     model.train()
@@ -113,8 +81,8 @@ def run_epoch_train(model, dataloader, optimizer, device):
         optimizer.zero_grad()
         loss.backward()
 
-        if TrainerConfig.max_norm > 0.:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), TrainerConfig.max_norm)
+        if trainer_cfg.max_norm > 0.:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), trainer_cfg.max_norm)
 
         optimizer.step()
 
@@ -138,34 +106,21 @@ def run_epoch_eval(model, dataloader, device='cpu'):
     return total_loss / max(n, 1)
 
 
-def train_model(
-    model,
-    train_loader,
-    val_loader,
-    device,
-    output_path,
-):
-
+def train_model(model, train_loader, val_loader, trainer_cfg, device, output_path):
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=TrainerConfig.lr,
-        weight_decay=TrainerConfig.weight_decay
+        lr=trainer_cfg.lr,
+        weight_decay=trainer_cfg.weight_decay,
     )
-
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(
-        optimizer,
-        gamma=TrainerConfig.gamma
-    )
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=trainer_cfg.gamma)
 
     best_val = float("inf")
-    patience_left = TrainerConfig.patience
+    patience_left = trainer_cfg.patience
     best_path = os.path.join(output_path, "best_model.pt")
-
     metrics = []
 
-    for epoch in range(TrainerConfig.max_epochs):
-
-        train_loss = run_epoch_train(model, train_loader, optimizer, device)
+    for epoch in range(trainer_cfg.max_epochs):
+        train_loss = run_epoch_train(model, train_loader, optimizer, trainer_cfg, device)
         val_loss = run_epoch_eval(model, val_loader, device)
 
         scheduler.step()
@@ -178,17 +133,12 @@ def train_model(
             f"lr={last_lr:.2e}"
         )
 
-        metrics.append({
-            "epoch": epoch,
-            "train_loss": train_loss,
-            "val_loss": val_loss,
-            "lr": last_lr,
-        })
+        metrics.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, "lr": last_lr})
 
         if val_loss < best_val:
             print('*')
             best_val = val_loss
-            patience_left = TrainerConfig.patience
+            patience_left = trainer_cfg.patience
             torch.save(model.state_dict(), best_path)
         else:
             patience_left -= 1
@@ -205,37 +155,31 @@ def main():
     print("pytorch", torch.__version__)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_path', default=f'./out/local', help='output path')
+    parser.add_argument('--config', required=True)
+    parser.add_argument('--output_path', default='./out/local')
     args = parser.parse_args()
 
-    config_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "static_config.yaml"
-    )
-    cfg = conf_read(config_path)
+    cfg = conf_read(args.config)
 
     random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
 
-    dataloader_config = OmegaConf.merge(cfg.dataloader, DataLoaderConfig)
-
     train_dataloader, val_dataloader, test_dataloader, cat_card, n_num, n_target = \
-        build_dataloaders(dataloader_config)
+        build_dataloaders(cfg.dataloader)
 
     device = get_accelerator()
     print('device:', device)
 
     print("Creating model")
-    model = Model(cat_card, n_num, n_target).to(device)
+    model = Model(cat_card, n_num, n_target, cfg=cfg.model).to(device)
 
     os.makedirs(args.output_path, exist_ok=True)
 
     print("Training model")
-    metrics = train_model(model, train_dataloader, val_dataloader, device, args.output_path)
+    metrics = train_model(model, train_dataloader, val_dataloader, cfg.trainer, device, args.output_path)
 
     metrics = pd.DataFrame(metrics)
     metrics_indexed = metrics.set_index("epoch")
-    # print(metrics_indexed)
 
     run_summary = {
         "min_val_loss": float(metrics["val_loss"].min()),
@@ -250,7 +194,7 @@ def main():
     test_loss = run_epoch_eval(model, test_dataloader, device=device)
 
     print("\nSummary:")
-    print(f"  min_val_loss={run_summary.min_val_loss:.5f}  (epoch {run_summary.min_epoch} / {TrainerConfig.max_epochs})")
+    print(f"  min_val_loss={run_summary.min_val_loss:.5f}  (epoch {run_summary.min_epoch} / {cfg.trainer.max_epochs})")
     print(f"  test_loss   ={test_loss:.5f}")
     print(f"  output      ={args.output_path}")
 
