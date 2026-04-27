@@ -18,8 +18,8 @@ if __name__ == '__main__':
     assert args.output.startswith("gs://demand-vision/temp/marc")  # for safety
 
     cfg = conf_read(args.config)
-    experiment_name = "auto-research"
-    run_name = os.path.basename(args.config).split('.')[0]
+    experiment_name = os.path.basename(args.config).split('.')[0]
+    run_name = os.path.basename(args.output)
 
     # Package src/ and upload
     code_uri = f"{args.output}/src.tar.gz"

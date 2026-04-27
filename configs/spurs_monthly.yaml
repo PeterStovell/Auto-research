@@ -1,0 +1,54 @@
+dataloader:
+  input_path: gs://demand-vision/temp/marc/data/quark-build-train-infer-k8sck-08-04-2025/dataframe.parquet
+  columns:
+    date: date
+    sequence: sequence
+    sequence_level:
+    - Channel ID
+    - PRODUCT_ID
+    - TERMINAL_ID
+    - SOLDTO_ID
+    categoricals:
+    - Channel ID
+    - PRODUCT_ID
+    - TERMINAL_ID
+    - SOLDTO_ID
+    - RACK_STATE
+    - month_of_year
+    numericals:
+    - y_volume_m0
+    targets:
+    - y_volume_m2
+    scaling:
+    - Channel ID
+    output:
+    - Channel ID
+    - PRODUCT_ID
+    - TERMINAL_ID
+    - SOLDTO_ID
+    - RACK_STATE
+    - GRADE_NAME
+    - month_of_year
+    - Allocation_Region_Name
+    - RACK_ID
+  train_end_date: '2024-01-01'
+  val_end_date: '2024-06-30'
+  seq_len: 12
+  batch_size: 512
+
+model:
+  hidden_dim: 128
+  num_layers: 2
+  dropout: 0.4
+  use_weighted_loss: false
+  train_on_last: true
+
+trainer:
+  lr: 0.005
+  patience: 15
+  max_epochs: 50
+  gamma: 0.9
+  weight_decay: 0.0
+  max_norm: 0.0
+
+seed: 10

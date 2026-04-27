@@ -26,24 +26,21 @@ class Model(torch.nn.Module):
             nn.Embedding(card, emb_dim)
             for card, emb_dim in zip(cat_card, emb_dims)
         ])
-        self.input_proj = nn.Linear(input_dim, cfg.hidden_dim)
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=cfg.hidden_dim,
-            nhead=cfg.nhead,
-            dim_feedforward=cfg.hidden_dim * 2,
-            dropout=cfg.dropout,
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=cfg.hidden_dim,
+            num_layers=cfg.num_layers,
+            dropout=cfg.dropout if cfg.num_layers > 1 else 0.0,
             batch_first=True,
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=cfg.num_layers)
+        # self.norm = nn.LayerNorm(cfg.hidden_dim)
         self.linear = nn.Linear(cfg.hidden_dim, n_target)
 
     def forward(self, cat, num):
         x = [emb(cat[..., i]) for i, emb in enumerate(self.embeddings)]
         x = torch.cat(x + [num], dim=-1)
-
-        y = self.input_proj(x)
-        mask = nn.Transformer.generate_square_subsequent_mask(y.size(1), device=y.device)
-        y = self.transformer(y, mask=mask, is_causal=True)
+        y, _ = self.lstm(x)
+        # y = self.norm(y)
         y = self.linear(y)
         return nn.functional.softplus(y)
 
@@ -52,6 +49,9 @@ class Model(torch.nn.Module):
         cat, num, target = cat.to(device), num.to(device), target.to(device)
 
         pred = self(cat, num)
+        if self.cfg.train_on_last:
+            pred = pred[:, -1, :]
+            target = target[:, -1, :]
         loss = torch.abs(pred - target)
 
         if self.cfg.use_weighted_loss:
