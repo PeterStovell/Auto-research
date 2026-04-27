@@ -36,7 +36,10 @@ with open(log_path, 'w') as log_file:
 if process.returncode != 0:
     raise subprocess.CalledProcessError(process.returncode, process.args)
 
-# Upload local output directory to GCS
+# Upload files in local output directory to GCS
 fs, _ = fsspec.url_to_fs(args.output_path)
-fs.put(LOCAL_OUTPUT, args.output_path, recursive=True)
-print(f"Output uploaded to {args.output_path}")
+for filename in os.listdir(LOCAL_OUTPUT):
+    local_file = os.path.join(LOCAL_OUTPUT, filename)
+    remote_file = f"{args.output_path}/{filename}"
+    fs.put(local_file, remote_file)
+    print(f"Uploaded {filename} -> {remote_file}")
