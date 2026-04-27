@@ -29,18 +29,20 @@ Our objective is to improve on our current Pytorch model (see `train.py`) and lo
 
 The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autoresearch/mar5-gpu0`).
 
-LOOP 10 TIMES:
+During the experiment loop, the dataloaders are fixed and defined by the dataloader section of the config. 
+Ask the user for the initial config.
+
+LOOP FOREVER:
 
 1. Implement an experimental idea by directly changing train.py and the config
-2. Run the experiment on kubeflow
-3. Analyse the results
+2. Pick a short experiment name e.g. "tcn_bz256"
+3. Run the experiment on kubeflow using the config name and experiment name
+4. Analyse the results, decide if you keep the experiment or roll it back
 
-The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
+The first experiment should be the baseline (name: baseline, no changes to the repo).
 
-**Timeout**: Each experiment should take ~5 minutes total (+ a few seconds for startup and eval overhead). If a run exceeds 10 minutes, kill it and treat it as a failure (discard and revert).
+The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. 
 
-**Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it, log "crash" as the status in the tsv, and move on.
+**Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it.
 
 **NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. You are autonomous. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes. The loop runs until the human interrupts you, period.
-
-As an example use case, a user might leave you running while they sleep. If each experiment takes you ~5 minutes then you can run approx 12/hour, for a total of about 100 over the duration of the average human sleep. The user then wakes up to experimental results, all completed by you while they slept!

@@ -44,8 +44,6 @@ Kubeflow experiment:
 ```bash
 make pipeline.yaml
 conda run -n kfp python run_kfp.py --config configs/{config_name}.yaml --output gs://demand-vision/temp/marc/runs/{config_name}/{experiment_name}
-# wait for job completion
-gcloud storage rsync gs://demand-vision/temp/marc/runs out/kfp --recursive
 ```
 
 If the run completes successfully, the output directory will contain:
