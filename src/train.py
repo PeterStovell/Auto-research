@@ -15,7 +15,7 @@ from dataloaders import build_dataloaders
 
 @dataclass
 class TrainerConfig:
-    batch_size: int = 256
+    batch_size: int = 512
     lr: float = 0.005
     patience: int = 15
     max_epochs: int = 50
@@ -117,7 +117,7 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
         lr=trainer_cfg.lr,
         weight_decay=trainer_cfg.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=trainer_cfg.gamma)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
 
     best_val = float("inf")
     patience_left = trainer_cfg.patience
