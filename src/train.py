@@ -117,7 +117,7 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
         lr=trainer_cfg.lr,
         weight_decay=trainer_cfg.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=trainer_cfg.max_epochs)
 
     best_val = float("inf")
     patience_left = trainer_cfg.patience
