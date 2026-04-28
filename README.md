@@ -34,7 +34,7 @@ The data and dataloaders are fixed and configured by `src/dataloaders.yaml`.
 
 Suppose you want to run an experiment named "tcn_bz256".
 
-After modifying `train.py` you run the experiment locally or on kubeflow:
+After modifying `src/train.py` you run the experiment locally or on kubeflow:
 
 Local run:
 

@@ -29,8 +29,6 @@ class ModelConfig:
     hidden_dim: int = 128
     num_layers: int = 2
     dropout: float = 0.4
-    use_weighted_loss: bool = False
-    train_on_last: bool = True  # only train the model on the last time step in the sequence
 
 
 class Model(torch.nn.Module):
@@ -52,33 +50,24 @@ class Model(torch.nn.Module):
             dropout=cfg.dropout if cfg.num_layers > 1 else 0.0,
             batch_first=True,
         )
-        # self.norm = nn.LayerNorm(cfg.hidden_dim)
+        self.attn = nn.Linear(cfg.hidden_dim, 1)
         self.linear = nn.Linear(cfg.hidden_dim, n_target)
 
     def forward(self, cat, num):
         x = [emb(cat[..., i]) for i, emb in enumerate(self.embeddings)]
         x = torch.cat(x + [num], dim=-1)
-        y, _ = self.lstm(x)
-        # y = self.norm(y)
-        y = self.linear(y)
-        return nn.functional.softplus(y)
+        h, _ = self.lstm(x)                              # [B, T, hidden]
+        w = torch.softmax(self.attn(h), dim=1)           # [B, T, 1]
+        ctx = (w * h).sum(dim=1, keepdim=True)           # [B, 1, hidden]
+        return nn.functional.softplus(self.linear(ctx))  # [B, 1, n_target]
 
     def compute_train_loss(self, batch, device):
         date, seq, cat, num, target = batch
         cat, num, target = cat.to(device), num.to(device), target.to(device)
-
         pred = self(cat, num)
-        if self.cfg.train_on_last:
-            pred = pred[:, -1, :]
-            target = target[:, -1, :]
-        loss = torch.abs(pred - target)
-
-        if self.cfg.use_weighted_loss:
-            T = loss.size(1)
-            weights = torch.linspace(0.2, 1.0, steps=T, device=loss.device).view(1, T, 1)
-            loss = loss * weights
-
-        return loss.mean()
+        pred = pred[:, -1, :]
+        target = target[:, -1, :]
+        return torch.abs(pred - target).mean()
 
     def compute_eval_loss(self, batch, device):
         date, seq, cat, num, target = batch
