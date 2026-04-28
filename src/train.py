@@ -15,7 +15,7 @@ from dataloaders import build_dataloaders
 
 @dataclass
 class TrainerConfig:
-    batch_size: int = 512
+    batch_size: int = 256
     lr: float = 0.005
     patience: int = 15
     max_epochs: int = 50
@@ -50,16 +50,13 @@ class Model(torch.nn.Module):
             dropout=cfg.dropout if cfg.num_layers > 1 else 0.0,
             batch_first=True,
         )
-        self.attn = nn.Linear(cfg.hidden_dim, 1)
         self.linear = nn.Linear(cfg.hidden_dim, n_target)
 
     def forward(self, cat, num):
         x = [emb(cat[..., i]) for i, emb in enumerate(self.embeddings)]
         x = torch.cat(x + [num], dim=-1)
-        h, _ = self.lstm(x)                              # [B, T, hidden]
-        w = torch.softmax(self.attn(h), dim=1)           # [B, T, 1]
-        ctx = (w * h).sum(dim=1, keepdim=True)           # [B, 1, hidden]
-        return nn.functional.softplus(self.linear(ctx))  # [B, 1, n_target]
+        y, _ = self.lstm(x)
+        return nn.functional.softplus(self.linear(y))
 
     def compute_train_loss(self, batch, device):
         date, seq, cat, num, target = batch
