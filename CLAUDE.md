@@ -31,7 +31,7 @@ LOOP FOREVER:
 1. Implement an experimental idea by directly changing the code
 2. Pick a short experiment name e.g. "tcn_bz256"
 3. Launch the experiment on kubeflow using the experiment name
-4. Poll the run status every 5mn (use get_kfp.py) 
+4. Wait for the run using wait_kfp.sh {run_id}
 5. When done, read the run_summary.yaml. If the experiment is an improvement, commit it. If the experiment is a fail try to fix it or roll back to the latest commit and start something new. 
 
 The first experiment should be the baseline (name: baseline, no changes to the repo).
