@@ -75,7 +75,7 @@ class Model(torch.nn.Module):
         return torch.nn.functional.l1_loss(pred, target)
 
 
-def run_epoch_train(model, dataloader, optimizer, trainer_cfg, device):
+def run_epoch_train(model, dataloader, optimizer, trainer_cfg, device, ema_state=None, ema_decay=0.999):
     total_loss = 0.
     n = 0
     model.train()
@@ -90,6 +90,13 @@ def run_epoch_train(model, dataloader, optimizer, trainer_cfg, device):
             torch.nn.utils.clip_grad_norm_(model.parameters(), trainer_cfg.max_norm)
 
         optimizer.step()
+
+        if ema_state is not None:
+            for k, v in model.state_dict().items():
+                if v.dtype.is_floating_point:
+                    ema_state[k].mul_(ema_decay).add_(v.detach(), alpha=1.0 - ema_decay)
+                else:
+                    ema_state[k].copy_(v)
 
         total_loss += loss.item()
         n += 1
@@ -117,7 +124,10 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
         lr=trainer_cfg.lr,
         weight_decay=trainer_cfg.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=trainer_cfg.max_epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+
+    ema_decay = 0.999
+    ema_state = {k: v.clone().detach() for k, v in model.state_dict().items()}
 
     best_val = float("inf")
     patience_left = trainer_cfg.patience
@@ -125,8 +135,15 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
     metrics = []
 
     for epoch in range(trainer_cfg.max_epochs):
-        train_loss = run_epoch_train(model, train_loader, optimizer, trainer_cfg, device)
+        train_loss = run_epoch_train(
+            model, train_loader, optimizer, trainer_cfg, device,
+            ema_state=ema_state, ema_decay=ema_decay,
+        )
+
+        backup = {k: v.clone() for k, v in model.state_dict().items()}
+        model.load_state_dict(ema_state)
         val_loss = run_epoch_eval(model, val_loader, device)
+        model.load_state_dict(backup)
 
         scheduler.step()
         last_lr = scheduler.get_last_lr()[0]
@@ -144,7 +161,7 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
             print('*')
             best_val = val_loss
             patience_left = trainer_cfg.patience
-            torch.save(model.state_dict(), best_path)
+            torch.save(ema_state, best_path)
         else:
             patience_left -= 1
             if patience_left <= 0:
