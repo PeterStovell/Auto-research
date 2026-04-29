@@ -6,6 +6,7 @@
       "Bash(until*)",
       "Bash(conda run*)",
       "Bash(bash ./rsync.sh*)",
+      "Bash(bash ./wait_kfp.sh*)",
       "Bash(grep*)",
       "Bash(cat*)",
       "Bash(ls*)",
