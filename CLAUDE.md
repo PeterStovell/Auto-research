@@ -28,14 +28,17 @@ Our objective is to improve on our current Pytorch model (see `train.py`) and lo
 
 LOOP FOREVER:
 
-1. Implement an experimental idea by directly changing train.py
+1. Implement an experimental idea by directly changing the code.
 2. Pick a short experiment name e.g. "tcn_bz256"
-3. Run the experiment on kubeflow using experiment name
-4. Analyse the results, decide if you keep the experiment or roll it back
+3. Run the experiment on kubeflow using the experiment name
+4. Check the run status using get_kfp.py
+5. When done, read the run_summary.yaml. If the experiment is an improvement, commit it. If the experiment is a fail try to fix it or roll back to the last commit and start something new. 
 
 The first experiment should be the baseline (name: baseline, no changes to the repo).
 
 The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. 
+
+Run experiments in sequence, learning from the previous experiment. Commit only the improvements.
 
 **Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it.
 
