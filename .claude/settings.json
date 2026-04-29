@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(for *)",
+      "Bash(conda run -n kfp python *)",
+      "Bash(bash ./rsync.sh*)",
+      "Bash(grep*)",
+      "Bash(cat*)",
+      "Bash(ls*)",
+      "Bash(echo*)",
+      "Bash(head*)",
+      "Bash(tail*)",
+      "Read(~/.zshrc)"
+    ]
+  }
+}
