@@ -66,7 +66,7 @@ If the run completes successfully, the output directory will contain:
 - `best_model.pt`
 - `curves.png`
 - `run_summary.yaml` : the run metrics and training curves data
-- `train.log` (kfp only)
+- `train.log` (kubeflow only)
 
 The format of `run_summary.yaml` is the following:
 
