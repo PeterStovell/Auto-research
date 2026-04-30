@@ -40,7 +40,7 @@ class Model(torch.nn.Module):
         input_dim = sum(emb_dims) + n_num
 
         self.embeddings = nn.ModuleList([
-            nn.Embedding(card, emb_dim)
+            nn.Embedding(card, emb_dim, max_norm=1.0)
             for card, emb_dim in zip(cat_card, emb_dims)
         ])
         self.lstm = nn.LSTM(
