@@ -1,20 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git*)",
-      "Bash(for*)",
-      "Bash(until*)",
-      "Bash(conda run*)",
-      "Bash(bash ./rsync.sh*)",
-      "Bash(bash ./wait_kfp.sh*)",
-      "Bash(grep*)",
-      "Bash(cat*)",
-      "Bash(ls*)",
-      "Bash(echo*)",
-      "Bash(head*)",
-      "Bash(tail*)",
-      "Bash(make*)",
-      "Read(~/.zshrc)"
     ]
   }
 }

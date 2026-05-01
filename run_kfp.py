@@ -14,7 +14,7 @@ def json_read(path: str):
 
 
 if __name__ == '__main__':
-    print("python", sys.version)
+    # print("python", sys.version)
     parser = argparse.ArgumentParser()
     # parser.add_argument('--config', required=True, help='path to config file')
     parser.add_argument('--output', required=True, help='path to output folder on gcs')

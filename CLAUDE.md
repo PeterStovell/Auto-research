@@ -12,6 +12,7 @@ Our objective is to improve on our current Pytorch model (see `train.py`) and lo
 
 **What you CAN do:**
 - Inside `train.py` modify everything except the function `compute_eval_loss`
+- Modify `features.py`
 
 **What you CANNOT do:**
 - Install new packages or add dependencies. 
