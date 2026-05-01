@@ -4,6 +4,7 @@ import torch
 from columns import Columns
 from sampler import dataframe_to_sequence_list, SliceDataset
 from encoder import get_encoder
+from features import add_features
 from utils import conf_read
 
 
@@ -20,6 +21,10 @@ def build_dataloaders(batch_size):
         print(f"dataset reduced by {1 - after / before : .2%}")
     print('Adding auxiliary columns')
     columns.add_auxiliary(df)
+    print('Adding engineered features')
+    new_features = add_features(df, columns)
+    columns['numericals'] = list(columns.numericals()) + new_features
+    print(f'numericals ({len(columns.numericals())}):', list(columns.numericals()))
     print('shape:', df.shape)
     print('nas:')
     print(df.isna().sum())
