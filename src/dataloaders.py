@@ -1,19 +1,30 @@
-
-import omegaconf
 import pandas as pd
 import torch
 
 from columns import Columns
 from sampler import dataframe_to_sequence_list, SliceDataset
 from encoder import get_encoder
+from features import add_features
+from utils import conf_read
 
 
-def build_dataloaders(cfg: omegaconf.DictConfig):
+def build_dataloaders(batch_size):
+    cfg = conf_read(__file__.replace('.py', '.yaml'))
     print('Loading ', cfg.input_path)
     columns = Columns(cfg.columns)  # add helper code
     df = pd.read_parquet(cfg.input_path, columns=columns.load_list()).dropna()
+    if "query" in cfg:
+        print("query:", cfg.query)
+        before = len(df)
+        df = df.query(cfg.query)
+        after = len(df)
+        print(f"dataset reduced by {1 - after / before : .2%}")
     print('Adding auxiliary columns')
     columns.add_auxiliary(df)
+    print('Adding engineered features')
+    new_features = add_features(df, columns)
+    columns['numericals'] = list(columns.numericals()) + new_features
+    print(f'numericals ({len(columns.numericals())}):', list(columns.numericals()))
     print('shape:', df.shape)
     print('nas:')
     print(df.isna().sum())
@@ -47,13 +58,13 @@ def build_dataloaders(cfg: omegaconf.DictConfig):
     print('test samples: ', len(test_ds))
 
     train_dataloader = torch.utils.data.DataLoader(
-        train_ds, batch_size=cfg.batch_size, shuffle=True, drop_last=False, num_workers=0,
+        train_ds, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=0,
     )
     val_dataloader = torch.utils.data.DataLoader(
-        val_ds, batch_size=cfg.batch_size, shuffle=False, drop_last=False, num_workers=0,
+        val_ds, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=0,
     )
     test_dataloader = torch.utils.data.DataLoader(
-        test_ds, batch_size=cfg.batch_size, shuffle=False, drop_last=False, num_workers=0,
+        test_ds, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=0,
     )
 
     cat_card = [df[c].nunique() for c in columns.categoricals()]

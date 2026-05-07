@@ -1,0 +1,26 @@
+name: spurs_monthly
+input_path: gs://demand-vision/temp/marc/data/quark-build-train-infer-k8sck-08-04-2025/dataframe.parquet
+columns:
+  date: date
+  sequence: sequence
+  sequence_level:  # unused
+  - Channel ID
+  - PRODUCT_ID
+  - TERMINAL_ID
+  - SOLDTO_ID
+  categoricals:
+  - Channel ID
+  - PRODUCT_ID
+  - TERMINAL_ID
+  - SOLDTO_ID
+  - RACK_STATE
+  - month_of_year
+  numericals:
+  - y_volume_m0
+  targets:
+  - y_volume_m2
+  scaling:
+  - Channel ID
+train_end_date: '2024-01-01'
+val_end_date: '2024-06-30'
+seq_len: 12
