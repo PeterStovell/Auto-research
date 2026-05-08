@@ -60,7 +60,7 @@ def get_slice_indexes(sequence_list:list[dict], length, start_date=None, end_dat
     slice_indexes = []
     for i in range(0, len(sequence_list)):
         dates = sequence_list[i]['date']
-        for j in range(0, len(dates) - length):
+        for j in range(0, len(dates) - length + 1):
             last_date = dates[j + length - 1]
             if (start_date is None or last_date >= start_date) and (end_date is None or last_date < end_date):
                 slice_indexes.append((i, j, j + length))

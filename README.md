@@ -8,8 +8,8 @@ We need an environment for local runs and an environment for kubeflow runs.
 This is because our kubeflow cluster is running an old version that is clashing with
 more recent libraries needed for the models.
 
-    conda env create -f conda/kfp.yml
-    conda env create -f conda/pytorch.yml
+    conda env create -f conda/kfp.yaml
+    conda env create -f conda/pytorch.yaml
     conda activate pytorch
 
 The kfp client configuration must be located here:
