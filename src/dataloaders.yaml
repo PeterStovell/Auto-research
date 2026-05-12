@@ -15,7 +15,84 @@ columns:
   - RACK_STATE
   - brand_indicator
   numericals:
+  # raw volume
   - NET_QTY
+  - y_volume_t1
+  # short-range rolling sums
+  - volume_2D
+  - volume_3D
+  - volume_4D
+  - volume_5D
+  # rolling means by group
+  - NET_QTY_mean1D_RACK_ID
+  - NET_QTY_mean7D_RACK_ID
+  - NET_QTY_mean14D_RACK_ID
+  - NET_QTY_mean28D_RACK_ID
+  - NET_QTY_mean84D_RACK_ID
+  - NET_QTY_mean168D_RACK_ID
+  - NET_QTY_mean7D_GRADE_NAME_RACK_PADD
+  - NET_QTY_mean28D_GRADE_NAME_RACK_PADD
+  - NET_QTY_mean168D_GRADE_NAME_RACK_PADD
+  - NET_QTY_mean7D_brand_indicator_RACK_PADD
+  - NET_QTY_mean28D_brand_indicator_RACK_PADD
+  - NET_QTY_mean168D_brand_indicator_RACK_PADD
+  - NET_QTY_mean7D_GRADE_NAME_brand_indicator_RACK_ID
+  - NET_QTY_mean28D_GRADE_NAME_brand_indicator_RACK_ID
+  - NET_QTY_mean168D_GRADE_NAME_brand_indicator_RACK_ID
+  # rolling stds by group
+  - NET_QTY_std7D_RACK_ID
+  - NET_QTY_std28D_RACK_ID
+  - NET_QTY_std168D_RACK_ID
+  - NET_QTY_std7D_GRADE_NAME_RACK_PADD
+  - NET_QTY_std28D_GRADE_NAME_RACK_PADD
+  - NET_QTY_std168D_GRADE_NAME_RACK_PADD
+  - NET_QTY_std7D_brand_indicator_RACK_PADD
+  - NET_QTY_std28D_brand_indicator_RACK_PADD
+  - NET_QTY_std168D_brand_indicator_RACK_PADD
+  - NET_QTY_std7D_GRADE_NAME_brand_indicator_RACK_ID
+  - NET_QTY_std28D_GRADE_NAME_brand_indicator_RACK_ID
+  - NET_QTY_std168D_GRADE_NAME_brand_indicator_RACK_ID
+  # EMA trend/volatility
+  - NET_QTY_diff_ema_1
+  - NET_QTY_diff_ema_7
+  - NET_QTY_diff_ema_14
+  - NET_QTY_diff_ema_21
+  - NET_QTY_diff_abs_ema_1
+  - NET_QTY_diff_abs_ema_7
+  - NET_QTY_diff_abs_ema_14
+  - NET_QTY_diff_abs_ema_21
+  # hierarchical 7D aggregates
+  - hier_1_7D_meansum
+  - hier_1_7D_std
+  - hier_2_7D_meansum
+  - hier_2_7D_std
+  - hier_3_7D_meansum
+  - hier_3_7D_std
+  - hier_4_7D_meansum
+  - hier_4_7D_std
+  - hier_5_7D_meansum
+  - hier_5_7D_std
+  - hier_6_7D_meansum
+  - hier_6_7D_std
+  # long-range trend
+  - long_7D_168D_mean
+  - long_7D_168D_std
+  # external model forecasts
+  - smart_volume_t2_low
+  - smart_volume_t2_mid
+  - smart_volume_t2_high
+  - smart_volume_t2t3_low
+  - smart_volume_t2t3_mid
+  - smart_volume_t2t3_high
+  - smart_volume_t2t4_low
+  - smart_volume_t2t4_mid
+  - smart_volume_t2t4_high
+  - smart_volume_t2t5_low
+  - smart_volume_t2t5_mid
+  - smart_volume_t2t5_high
+  - smart_volume_t2t6_low
+  - smart_volume_t2t6_mid
+  - smart_volume_t2t6_high
   targets:
   - y_volume_t2
   scaling:

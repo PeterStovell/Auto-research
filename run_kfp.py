@@ -82,7 +82,7 @@ if __name__ == '__main__':
     assert args.output.startswith(f"gs://demand-vision/temp/{gcs_user}"), \
         f"Output path must be under gs://demand-vision/temp/{gcs_user}/"
 
-    experiment_name = "auto-research"
+    experiment_name = "auto-research-smart-features"
     run_name = os.path.basename(args.output)
 
     # Package src/ and upload
