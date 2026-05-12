@@ -7,21 +7,81 @@ import tempfile
 import fsspec
 import kfp
 
+from dex_auth import DexSessionManager
+
+
+def load_dotenv(path=".env"):
+    from pathlib import Path
+    env_file = Path(path)
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+load_dotenv()
+
 
 def json_read(path: str):
     with open(path) as f:
         return json.load(f)
 
 
+def get_kfp_client() -> kfp.Client:
+    endpoint = os.environ.get("KUBEFLOW_ENDPOINT", "").rstrip("/")
+    if not endpoint:
+        raise ValueError("KUBEFLOW_ENDPOINT is required in .env")
+    username = os.environ.get("KUBEFLOW_USERNAME")
+    password = os.environ.get("KUBEFLOW_PASSWORD")
+    if not username or not password:
+        raise ValueError("KUBEFLOW_USERNAME and KUBEFLOW_PASSWORD are required in .env")
+    skip_tls = os.environ.get("KUBEFLOW_SKIP_TLS_VERIFY", "").lower() == "true"
+
+    dex = DexSessionManager(
+        endpoint_url=endpoint,
+        dex_username=username,
+        dex_password=password,
+        dex_auth_type="local",
+        skip_tls_verify=skip_tls,
+    )
+    session_cookies = dex.get_session_cookies()
+
+    namespace = os.environ.get("KUBEFLOW_NAMESPACE")
+    if not namespace:
+        raise ValueError("KUBEFLOW_NAMESPACE is required in .env")
+
+    kfp_cfg = json_read(os.path.expanduser('~/.config/kfp/client.json'))
+    pipeline_host = endpoint if endpoint.endswith("/pipeline") else endpoint + "/pipeline"
+
+    client = kfp.Client(
+        host=pipeline_host,
+        cookies=session_cookies,
+        namespace=namespace,
+    )
+
+    if skip_tls:
+        import ssl
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        client._run_api.api_client.rest_client.pool_manager = urllib3.PoolManager(
+            num_pools=4,
+            cert_reqs=ssl.CERT_NONE,
+        )
+
+    return client
+
+
 if __name__ == '__main__':
-    # print("python", sys.version)
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--config', required=True, help='path to config file')
     parser.add_argument('--output', required=True, help='path to output folder on gcs')
     args = parser.parse_args()
-    assert args.output.startswith("gs://demand-vision/temp/marc")  # for safety
+    gcs_user = os.environ.get("KUBEFLOW_USERNAME", "").split("@")[0]
+    assert args.output.startswith(f"gs://demand-vision/temp/{gcs_user}"), \
+        f"Output path must be under gs://demand-vision/temp/{gcs_user}/"
 
-    # cfg = conf_read(args.config)
     experiment_name = "auto-research"
     run_name = os.path.basename(args.output)
 
@@ -36,22 +96,13 @@ if __name__ == '__main__':
             f_out.write(f_in.read())
     os.unlink(tmp_path)
 
-    # Upload config
-    # config_uri = f"{args.output}/config.yaml"
-    # with open(args.config, 'rb') as f_in:
-    #     with fsspec.open(config_uri, 'wb') as f_out:
-    #         f_out.write(f_in.read())
-    # print(f"config   -> {config_uri}")
-
-    kfp_cfg = json_read(os.path.expanduser('~/.config/kfp/client.json'))
-    client = kfp.Client(**kfp_cfg)
+    client = get_kfp_client()
 
     run = client.create_run_from_pipeline_package(
         pipeline_file='pipeline.yaml',
         run_name=run_name,
         arguments={
             'code_uri': code_uri,
-            # 'config_uri': config_uri,
             'output_path': args.output,
         },
         experiment_name=experiment_name,

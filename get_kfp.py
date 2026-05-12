@@ -2,22 +2,30 @@ import json
 import argparse
 import os
 import sys
+import kfp
+from dex_auth import DexSessionManager
+from run_kfp import get_kfp_client
 
-
-def json_read(path: str):
-    with open(path) as f:
-        return json.load(f)
+def load_dotenv(path=".env"):
+    from pathlib import Path
+    env_file = Path(path)
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+load_dotenv()
 
 
 if __name__ == '__main__':
-    # print("python", sys.version)
-    import kfp
     parser = argparse.ArgumentParser()
     parser.add_argument('--run_id', required=True, nargs='+', help='KFP run ID(s)')
     args = parser.parse_args()
 
-    kfp_cfg = json_read(os.path.expanduser('~/.config/kfp/client.json'))
-    client = kfp.Client(**kfp_cfg)
+    client = get_kfp_client()
 
     for run_id in args.run_id:
         run = client.get_run(run_id)

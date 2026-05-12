@@ -12,19 +12,21 @@ more recent libraries needed for the models.
     conda env create -f conda/pytorch.yaml
     conda activate pytorch
 
-The kfp client configuration must be located here:
+Create a `.env` file in the repo root with your Kubeflow credentials:
 
-    ~/.config/kfp/client.json
+    KUBEFLOW_ENDPOINT=https://dev-kubeflow-1-11.stovell.ai
+    KUBEFLOW_USERNAME=<your-email>@stovell.ai
+    KUBEFLOW_PASSWORD=<your-password>
+    KUBEFLOW_SKIP_TLS_VERIFY=true
+    KUBEFLOW_NAMESPACE=main
 
-example content:
+Create `~/.config/kfp/client.json`:
 
     {
-        "host": "https://kubeflow18.endpoints.dev-stovell-ai.cloud.goog/pipeline", 
-        "client_id": "811609456607-61mmvhq0o7vq4rgu25hkl25g7bulug1t.apps.googleusercontent.com", 
-        "other_client_id": "811609456607-i25dvmvcr9ousd48mp03fsrnhsq0ajdc.apps.googleusercontent.com", 
-        "other_client_secret": "...", 
-        "namespace": "marc"
+        "host": "https://dev-kubeflow-1-11.stovell.ai/pipeline"
     }
+
+Authentication uses DEX session cookies (`dex_auth.py`) — no OAuth client credentials needed. The cluster uses a shared `main` namespace.
 
 ## Data
 
@@ -52,7 +54,7 @@ Kubeflow run:
 
 ```bash
 make pipeline.yaml
-conda run -n kfp python run_kfp.py --output gs://demand-vision/temp/marc/runs/{experiment_name}
+bash run_kfp.sh {experiment_name}
 ```
 
 To check the status of the Kubeflow run:
