@@ -16,7 +16,7 @@ from dataloaders import build_dataloaders
 @dataclass
 class TrainerConfig:
     batch_size: int = 512
-    lr: float = 0.003
+    lr: float = 0.001
     patience: int = 15
     max_epochs: int = 50
     gamma: float = 0.9
