@@ -1,5 +1,5 @@
 name: dv_daily
-input_path: ~/src/stovell/data/dv/dataframe.parquet
+input_path: gs://demand-vision/temp/peter/data/dv/dataframe.parquet
 sequence_cache_path: out/cache/dv_daily_sequences.pt
 columns:
   date: date
