@@ -33,7 +33,8 @@ LOOP FOREVER:
 2. Pick a short experiment name e.g. "tcn_bz256"
 3. Launch the experiment on kubeflow using the experiment name
 4. Wait for the run using wait_kfp.sh {run_id}
-5. When done, read the run_summary.yaml. If the experiment is an improvement, commit it. If the experiment is a fail try to fix it or roll back to the latest commit and start something new. 
+5. When done, read the run_summary.yaml. Append a row to EXPERIMENTS_TIMELINE.md with the run number, val_loss, experiment name, and a short summary. Mark with ⭐ if it is an improvement.
+6. If the experiment is an improvement, commit it. If the experiment is a fail try to fix it or roll back to the latest commit and start something new.
 
 The first experiment should be the baseline (name: baseline, no changes to the repo).
 

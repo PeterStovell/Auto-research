@@ -122,7 +122,7 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
         lr=trainer_cfg.lr,
         weight_decay=trainer_cfg.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=20, T_mult=2)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=trainer_cfg.max_epochs)
 
     ema_decay = 0.999
     ema_state = {k: v.clone().detach() for k, v in model.state_dict().items()}
