@@ -62,8 +62,6 @@ class Model(torch.nn.Module):
         date, seq, cat, num, target = batch
         cat, num, target = cat.to(device), num.to(device), target.to(device)
         pred = self(cat, num)
-        pred = pred[:, -1, :]
-        target = target[:, -1, :]
         return torch.abs(pred - target).mean()
 
     def compute_eval_loss(self, batch, device):
