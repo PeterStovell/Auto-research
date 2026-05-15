@@ -79,8 +79,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, help='path to output folder on gcs')
     args = parser.parse_args()
     gcs_user = os.environ.get("KUBEFLOW_USERNAME", "").split("@")[0]
-    assert args.output.startswith(f"gs://demand-vision/temp/{gcs_user}"), \
-        f"Output path must be under gs://demand-vision/temp/{gcs_user}/"
+    assert args.output.startswith(f"gs://demand-vision/temp/{gcs_user}/runs/rich_features/"), \
+        f"Output path must be under gs://demand-vision/temp/{gcs_user}/runs/rich_features/"
 
     experiment_name = "auto-research-smart-features"
     run_name = os.path.basename(args.output)

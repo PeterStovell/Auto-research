@@ -26,7 +26,7 @@ class TrainerConfig:
 
 @dataclass
 class ModelConfig:
-    hidden_dim: int = 128
+    hidden_dim: int = 256
     num_layers: int = 2
     dropout: float = 0.4
 
@@ -122,7 +122,7 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
         lr=trainer_cfg.lr,
         weight_decay=trainer_cfg.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=trainer_cfg.max_epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=20, T_mult=2)
 
     ema_decay = 0.999
     ema_state = {k: v.clone().detach() for k, v in model.state_dict().items()}
