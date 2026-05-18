@@ -362,6 +362,19 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
     return metrics
 
 
+def load_pretrained_backbone(model: nn.Module, backbone_path: str):
+    """
+    Load backbone weights from a pre-training run into the model.
+
+    Only layers whose keys match (layers.*, input_norm*, output_norm*) are loaded.
+    Mismatched heads (embeddings, input_proj, linear) are left randomly initialized.
+    Uses strict=False so missing/unexpected keys are tolerated.
+    """
+    state = torch.load(backbone_path, map_location='cpu')
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    print(f"Loaded backbone: {len(state)} keys, {len(missing)} missing, {len(unexpected)} unexpected")
+
+
 def main():
     print("python", sys.version)
     print("pytorch", torch.__version__)
@@ -369,6 +382,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', required=True, help='path to output folder')
     parser.add_argument('--max_epochs', type=int, default=None, help='override max_epochs in trainer config')
+    parser.add_argument('--pretrain_backbone', default=None, help='path to pretrain_backbone.pt for weight transfer')
     args = parser.parse_args()
 
     seed = 10
@@ -392,6 +406,10 @@ def main():
     model = Model(cat_card, n_num, n_target, cfg=model_cfg).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
+
+    if args.pretrain_backbone is not None:
+        print(f"Loading pretrained backbone from {args.pretrain_backbone}")
+        load_pretrained_backbone(model, args.pretrain_backbone)
 
     os.makedirs(args.output, exist_ok=True)
 
