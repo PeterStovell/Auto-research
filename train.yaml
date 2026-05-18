@@ -1,0 +1,20 @@
+name: train
+description: Fine-tune on gas volume data, optionally from a pre-trained backbone
+
+inputs:
+- {name: code_uri,              type: String, description: 'GCS URI of src.tar.gz'}
+- {name: output_path,           type: String, description: 'GCS output path'}
+- {name: pretrain_backbone_uri, type: String, description: 'GCS URI of pretrain_backbone.pt (empty to skip)'}
+
+implementation:
+  container:
+    image: gcr.io/dev-stovell-ai/pytorch-research/auto-research@sha256:5a4073b4d0a4df565c1856fd911e3cb42ace528c70969afe75cb78558a919e1f
+    command:
+      - python3
+      - entrypoint.py
+      - --code_uri
+      - {inputValue: code_uri}
+      - --output_path
+      - {inputValue: output_path}
+      - --pretrain_backbone_uri
+      - {inputValue: pretrain_backbone_uri}

@@ -1,0 +1,115 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: pretrain-finetune-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.22, pipelines.kubeflow.org/pipeline_compilation_time: '2026-05-18T13:41:51.487403',
+    pipelines.kubeflow.org/pipeline_spec: '{"description": "Pre-train on M5+Electricity,
+      fine-tune on gas volume", "inputs": [{"name": "code_uri", "type": "String"},
+      {"name": "pretrain_data_uri", "type": "String"}, {"name": "pretrain_output_path",
+      "type": "String"}, {"name": "pretrain_backbone_uri", "type": "String"}, {"name":
+      "output_path", "type": "String"}], "name": "pretrain-finetune"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.22}
+spec:
+  entrypoint: pretrain-finetune
+  templates:
+  - name: pretrain
+    container:
+      args: []
+      command: [python3, entrypoint.py, --mode, pretrain, --code_uri, '{{inputs.parameters.code_uri}}',
+        --pretrain_data_uri, '{{inputs.parameters.pretrain_data_uri}}', --output_path,
+        '{{inputs.parameters.pretrain_output_path}}']
+      image: gcr.io/dev-stovell-ai/pytorch-research/auto-research@sha256:5a4073b4d0a4df565c1856fd911e3cb42ace528c70969afe75cb78558a919e1f
+      resources:
+        limits: {nvidia.com/gpu: 1, memory: 128G}
+        requests: {memory: 16G}
+    inputs:
+      parameters:
+      - {name: code_uri}
+      - {name: pretrain_data_uri}
+      - {name: pretrain_output_path}
+    nodeSelector: {cloud.google.com/gke-accelerator: nvidia-tesla-t4}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.22
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"description": "Pre-train
+          backbone on M5 + UCI Electricity datasets", "implementation": {"container":
+          {"command": ["python3", "entrypoint.py", "--mode", "pretrain", "--code_uri",
+          {"inputValue": "code_uri"}, "--pretrain_data_uri", {"inputValue": "pretrain_data_uri"},
+          "--output_path", {"inputValue": "output_path"}], "image": "gcr.io/dev-stovell-ai/pytorch-research/auto-research@sha256:5a4073b4d0a4df565c1856fd911e3cb42ace528c70969afe75cb78558a919e1f"}},
+          "inputs": [{"description": "GCS URI of src.tar.gz", "name": "code_uri",
+          "type": "String"}, {"description": "GCS folder with pretrain parquets",
+          "name": "pretrain_data_uri", "type": "String"}, {"description": "GCS output
+          path for backbone", "name": "output_path", "type": "String"}], "name": "pretrain"}',
+        pipelines.kubeflow.org/component_ref: '{"digest": "1c55102897aeb5009e4ccc12444c27f548fc687777497ac7528ba1cb31507c76",
+          "url": "pretrain.yaml"}', pipelines.kubeflow.org/arguments.parameters: '{"code_uri":
+          "{{inputs.parameters.code_uri}}", "output_path": "{{inputs.parameters.pretrain_output_path}}",
+          "pretrain_data_uri": "{{inputs.parameters.pretrain_data_uri}}"}'}
+  - name: pretrain-finetune
+    inputs:
+      parameters:
+      - {name: code_uri}
+      - {name: output_path}
+      - {name: pretrain_backbone_uri}
+      - {name: pretrain_data_uri}
+      - {name: pretrain_output_path}
+    dag:
+      tasks:
+      - name: pretrain
+        template: pretrain
+        arguments:
+          parameters:
+          - {name: code_uri, value: '{{inputs.parameters.code_uri}}'}
+          - {name: pretrain_data_uri, value: '{{inputs.parameters.pretrain_data_uri}}'}
+          - {name: pretrain_output_path, value: '{{inputs.parameters.pretrain_output_path}}'}
+      - name: train
+        template: train
+        dependencies: [pretrain]
+        arguments:
+          parameters:
+          - {name: code_uri, value: '{{inputs.parameters.code_uri}}'}
+          - {name: output_path, value: '{{inputs.parameters.output_path}}'}
+          - {name: pretrain_backbone_uri, value: '{{inputs.parameters.pretrain_backbone_uri}}'}
+  - name: train
+    container:
+      args: []
+      command: [python3, entrypoint.py, --code_uri, '{{inputs.parameters.code_uri}}',
+        --output_path, '{{inputs.parameters.output_path}}', --pretrain_backbone_uri,
+        '{{inputs.parameters.pretrain_backbone_uri}}']
+      image: gcr.io/dev-stovell-ai/pytorch-research/auto-research@sha256:5a4073b4d0a4df565c1856fd911e3cb42ace528c70969afe75cb78558a919e1f
+      resources:
+        limits: {nvidia.com/gpu: 1, memory: 128G}
+        requests: {memory: 16G}
+    inputs:
+      parameters:
+      - {name: code_uri}
+      - {name: output_path}
+      - {name: pretrain_backbone_uri}
+    nodeSelector: {cloud.google.com/gke-accelerator: nvidia-tesla-t4}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.22
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"description": "Fine-tune
+          on gas volume data, optionally from a pre-trained backbone", "implementation":
+          {"container": {"command": ["python3", "entrypoint.py", "--code_uri", {"inputValue":
+          "code_uri"}, "--output_path", {"inputValue": "output_path"}, "--pretrain_backbone_uri",
+          {"inputValue": "pretrain_backbone_uri"}], "image": "gcr.io/dev-stovell-ai/pytorch-research/auto-research@sha256:5a4073b4d0a4df565c1856fd911e3cb42ace528c70969afe75cb78558a919e1f"}},
+          "inputs": [{"description": "GCS URI of src.tar.gz", "name": "code_uri",
+          "type": "String"}, {"description": "GCS output path", "name": "output_path",
+          "type": "String"}, {"description": "GCS URI of pretrain_backbone.pt (empty
+          to skip)", "name": "pretrain_backbone_uri", "type": "String"}], "name":
+          "train"}', pipelines.kubeflow.org/component_ref: '{"digest": "9358d427240a42f77c5afd2f8f2215b8ce9c039ad4a7e059a83efb0b61d52a4c",
+          "url": "train.yaml"}', pipelines.kubeflow.org/arguments.parameters: '{"code_uri":
+          "{{inputs.parameters.code_uri}}", "output_path": "{{inputs.parameters.output_path}}",
+          "pretrain_backbone_uri": "{{inputs.parameters.pretrain_backbone_uri}}"}'}
+  arguments:
+    parameters:
+    - {name: code_uri}
+    - {name: pretrain_data_uri}
+    - {name: pretrain_output_path}
+    - {name: pretrain_backbone_uri}
+    - {name: output_path}
+  serviceAccountName: pipeline-runner
