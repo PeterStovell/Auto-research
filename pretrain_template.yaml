@@ -11,7 +11,9 @@ implementation:
     image: IMAGE
     command:
       - python3
-      - pretrain_entrypoint.py
+      - entrypoint.py
+      - --mode
+      - pretrain
       - --code_uri
       - {inputValue: code_uri}
       - --pretrain_data_uri
