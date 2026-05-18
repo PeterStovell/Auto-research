@@ -8,5 +8,8 @@ image : Dockerfile entrypoint.py
 train.yaml: train_template.yaml image
 	sed -e "s|IMAGE|$(shell cat image)|g" train_template.yaml > train.yaml
 
-pipeline.yaml : train.yaml pipeline.py
+pretrain.yaml: pretrain_template.yaml image
+	sed -e "s|IMAGE|$(shell cat image)|g" pretrain_template.yaml > pretrain.yaml
+
+pipeline.yaml : train.yaml pretrain.yaml pipeline.py
 	conda run -n kfp dsl-compile --py pipeline.py --output pipeline.yaml

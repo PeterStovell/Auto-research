@@ -76,14 +76,20 @@ def get_kfp_client() -> kfp.Client:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output', required=True, help='path to output folder on gcs')
+    parser.add_argument('--output', required=True, help='path to output folder on GCS')
+    parser.add_argument('--pretrain_path', default='gs://demand-vision/temp/peter/runs/pretrain_data',
+                        help='GCS folder containing m5_daily.parquet and electricity_daily.parquet')
     args = parser.parse_args()
     gcs_user = os.environ.get("KUBEFLOW_USERNAME", "").split("@")[0]
-    assert args.output.startswith(f"gs://demand-vision/temp/{gcs_user}/runs/rich_features/"), \
-        f"Output path must be under gs://demand-vision/temp/{gcs_user}/runs/rich_features/"
+    assert args.output.startswith(f"gs://demand-vision/temp/{gcs_user}/runs/"), \
+        f"Output path must be under gs://demand-vision/temp/{gcs_user}/runs/"
 
-    experiment_name = "auto-research-smart-features"
+    experiment_name = "auto-research-pretrain-finetune"
     run_name = os.path.basename(args.output)
+
+    pretrain_output_path  = f"{args.output}/pretrain"
+    pretrain_backbone_uri = f"{pretrain_output_path}/pretrain_backbone.pt"
+    pretrain_data_uri     = args.pretrain_path
 
     # Package src/ and upload
     code_uri = f"{args.output}/src.tar.gz"
@@ -102,8 +108,11 @@ if __name__ == '__main__':
         pipeline_file='pipeline.yaml',
         run_name=run_name,
         arguments={
-            'code_uri': code_uri,
-            'output_path': args.output,
+            'code_uri':              code_uri,
+            'pretrain_data_uri':     pretrain_data_uri,
+            'pretrain_output_path':  pretrain_output_path,
+            'pretrain_backbone_uri': pretrain_backbone_uri,
+            'output_path':           args.output,
         },
         experiment_name=experiment_name,
     )
