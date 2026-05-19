@@ -11,7 +11,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from utils import conf_read, conf_write, get_accelerator, plot_curves
+from utils import conf_read, conf_write, get_accelerator, plot_curves, write_model_architecture
 from dataloaders import build_dataloaders
 from visualization import DiagnosticLogger, plot_all
 
@@ -406,6 +406,7 @@ def main():
     model = Model(cat_card, n_num, n_target, cfg=model_cfg).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
+    write_model_architecture(model)
 
     if args.pretrain_backbone is not None:
         print(f"Loading pretrained backbone from {args.pretrain_backbone}")

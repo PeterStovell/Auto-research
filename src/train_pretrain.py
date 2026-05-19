@@ -26,7 +26,7 @@ _SRC = os.path.dirname(os.path.abspath(__file__))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from utils import conf_write, get_accelerator, plot_curves
+from utils import conf_write, get_accelerator, plot_curves, write_model_architecture
 from train_switch import Model, TrainerConfig, ModelConfig, train_model
 from pretrain.dataloader import build_pretrain_dataloaders
 
@@ -68,6 +68,7 @@ def main():
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
     print(f"cat_card={cat_card}, n_num={n_num}, n_target={n_target}")
+    write_model_architecture(model)
 
     os.makedirs(args.output, exist_ok=True)
 
