@@ -4,7 +4,6 @@ import tarfile
 import os
 import subprocess
 import fsspec
-import gcsfs
 
 LOCAL_OUTPUT = '/workspace/output'
 LOCAL_PRETRAIN_DATA = '/workspace/pretrain_data'
@@ -36,19 +35,25 @@ if args.mode == 'pretrain':
     # Download pretrain parquets from GCS
     assert args.pretrain_data_uri, '--pretrain_data_uri is required in pretrain mode'
     os.makedirs(LOCAL_PRETRAIN_DATA, exist_ok=True)
-    gcs = gcsfs.GCSFileSystem()
-    print(f"[DEBUG] gcsfs version: {gcsfs.__version__}")
-    print(f"[DEBUG] pretrain_data_uri: {args.pretrain_data_uri!r}")
-    print(f"[DEBUG] LOCAL_PRETRAIN_DATA exists: {os.path.exists(LOCAL_PRETRAIN_DATA)}, contents: {os.listdir(LOCAL_PRETRAIN_DATA)}")
+    fs, _ = fsspec.url_to_fs(args.pretrain_data_uri)
     for fname in ['m5_daily.parquet', 'electricity_daily.parquet']:
         remote = f"{args.pretrain_data_uri.rstrip('/')}/{fname}"
         local = os.path.join(LOCAL_PRETRAIN_DATA, fname)
-        print(f"[DEBUG] Checking remote exists: {gcs.exists(remote)}")
-        print(f"[DEBUG] Remote info: {gcs.info(remote) if gcs.exists(remote) else 'N/A'}")
-        print(f"Downloading {remote} -> {local}")
-        gcs.get(remote, local)
-        local_size = os.path.getsize(local) if os.path.exists(local) else 'FILE MISSING'
-        print(f"[DEBUG] Local file size after get: {local_size}")
+        try:
+            info = fs.info(remote)
+        except FileNotFoundError:
+            raise RuntimeError(f"{remote} does not exist in GCS — upload the file first")
+        if info.get('type') != 'file':
+            raise RuntimeError(f"{remote} is a directory placeholder, not a file — re-upload it to GCS")
+        if info.get('size', 0) == 0:
+            raise RuntimeError(f"{remote} is 0 bytes — re-upload the file to GCS first")
+        print(f"Downloading {remote} -> {local} ({info['size']} bytes)")
+        fs.get(remote, local)
+        local_size = os.path.getsize(local)
+        if local_size != info['size']:
+            raise RuntimeError(
+                f"{fname} download incomplete: expected {info['size']} bytes, got {local_size}"
+            )
 
     cmd = [sys.executable, 'train_pretrain.py',
            '--output', LOCAL_OUTPUT,
