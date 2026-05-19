@@ -32,7 +32,6 @@ def preprocess(raw_dir: str, out_dir: str):
         decimal=",",
         index_col=0,
         parse_dates=True,
-        infer_datetime_format=True,
     )
     # Index is datetime, columns are MT_001..MT_370
     df_raw.index.name = "datetime"

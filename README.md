@@ -53,15 +53,49 @@ python src/train.py --output out/local/{experiment_name} --max_epochs 5
 Kubeflow run:
 
 ```bash
-make pipeline.yaml
 bash run_kfp.sh {experiment_name}
 ```
 
-To check the status of the Kubeflow run:
+To wait for a run to complete:
+
+```bash
+bash wait_kfp.sh {run_id}
+```
+
+To check the status of the Kubeflow run manually:
 
 ```bash
 conda run -n kfp python get_kfp.py --run_id {run_id}
 ```
+
+## Pretrain → Finetune pipeline
+
+The Kubeflow pipeline is a two-stage pretrain→finetune pipeline:
+
+1. **Pretrain** — trains the Switch Transformer backbone on M5 and UCI Electricity data (`src/train_pretrain.py`), producing `pretrain_backbone.pt`.
+2. **Finetune** — loads the pretrained backbone and fine-tunes on the target gas volume data (`src/train_switch.py`).
+
+Both stages run automatically when you call `run_kfp.sh`. By default, pretrain data is read from `gs://demand-vision/temp/peter/runs/pretrain_data`. To reuse a previously pre-trained backbone (skip the pretrain stage), pass its GCS path as a second argument:
+
+```bash
+bash run_kfp.sh {experiment_name} gs://demand-vision/temp/{user}/runs/{pretrain_run}/pretrain
+```
+
+To run pre-training locally:
+
+```bash
+conda run -n pytorch python src/train_pretrain.py --output out/pretrain_run1
+```
+
+To run fine-tuning locally against a pre-trained backbone:
+
+```bash
+conda run -n pytorch python src/train_switch.py \
+    --pretrain_backbone out/pretrain_run1/pretrain_backbone.pt \
+    --output out/finetune_run1
+```
+
+Output artifacts from each stage are written under `{output}/pretrain/` and `{output}/` respectively.
 
 If the run completes successfully, the output directory will contain:
 
