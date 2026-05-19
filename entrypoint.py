@@ -4,6 +4,7 @@ import tarfile
 import os
 import subprocess
 import fsspec
+import gcsfs
 
 LOCAL_OUTPUT = '/workspace/output'
 LOCAL_PRETRAIN_DATA = '/workspace/pretrain_data'
@@ -35,12 +36,12 @@ if args.mode == 'pretrain':
     # Download pretrain parquets from GCS
     assert args.pretrain_data_uri, '--pretrain_data_uri is required in pretrain mode'
     os.makedirs(LOCAL_PRETRAIN_DATA, exist_ok=True)
+    gcs = gcsfs.GCSFileSystem()
     for fname in ['m5_daily.parquet', 'electricity_daily.parquet']:
         remote = f"{args.pretrain_data_uri.rstrip('/')}/{fname}"
         local = os.path.join(LOCAL_PRETRAIN_DATA, fname)
         print(f"Downloading {remote} -> {local}")
-        with fsspec.open(remote, 'rb') as src, open(local, 'wb') as dst:
-            dst.write(src.read())
+        gcs.get(remote, local)
 
     cmd = [sys.executable, 'train_pretrain.py',
            '--output', LOCAL_OUTPUT,
