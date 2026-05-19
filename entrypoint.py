@@ -37,11 +37,18 @@ if args.mode == 'pretrain':
     assert args.pretrain_data_uri, '--pretrain_data_uri is required in pretrain mode'
     os.makedirs(LOCAL_PRETRAIN_DATA, exist_ok=True)
     gcs = gcsfs.GCSFileSystem()
+    print(f"[DEBUG] gcsfs version: {gcsfs.__version__}")
+    print(f"[DEBUG] pretrain_data_uri: {args.pretrain_data_uri!r}")
+    print(f"[DEBUG] LOCAL_PRETRAIN_DATA exists: {os.path.exists(LOCAL_PRETRAIN_DATA)}, contents: {os.listdir(LOCAL_PRETRAIN_DATA)}")
     for fname in ['m5_daily.parquet', 'electricity_daily.parquet']:
         remote = f"{args.pretrain_data_uri.rstrip('/')}/{fname}"
         local = os.path.join(LOCAL_PRETRAIN_DATA, fname)
+        print(f"[DEBUG] Checking remote exists: {gcs.exists(remote)}")
+        print(f"[DEBUG] Remote info: {gcs.info(remote) if gcs.exists(remote) else 'N/A'}")
         print(f"Downloading {remote} -> {local}")
         gcs.get(remote, local)
+        local_size = os.path.getsize(local) if os.path.exists(local) else 'FILE MISSING'
+        print(f"[DEBUG] Local file size after get: {local_size}")
 
     cmd = [sys.executable, 'train_pretrain.py',
            '--output', LOCAL_OUTPUT,
