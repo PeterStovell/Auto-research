@@ -35,12 +35,12 @@ if args.mode == 'pretrain':
     # Download pretrain parquets from GCS
     assert args.pretrain_data_uri, '--pretrain_data_uri is required in pretrain mode'
     os.makedirs(LOCAL_PRETRAIN_DATA, exist_ok=True)
-    fs, _ = fsspec.url_to_fs(args.pretrain_data_uri)
     for fname in ['m5_daily.parquet', 'electricity_daily.parquet']:
         remote = f"{args.pretrain_data_uri.rstrip('/')}/{fname}"
         local = os.path.join(LOCAL_PRETRAIN_DATA, fname)
         print(f"Downloading {remote} -> {local}")
-        fs.get(remote, local)
+        with fsspec.open(remote, 'rb') as src, open(local, 'wb') as dst:
+            dst.write(src.read())
 
     cmd = [sys.executable, 'train_pretrain.py',
            '--output', LOCAL_OUTPUT,
