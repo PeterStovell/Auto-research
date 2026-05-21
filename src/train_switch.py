@@ -43,6 +43,7 @@ class ModelConfig:
     aux_loss_weight: float = 0.1   # weight for load-balancing auxiliary loss
     multistep_steps: int = 3       # steps ahead for multi-step forecast pretrain task
     impute_mask_ratio: float = 0.15  # fraction of timesteps masked for imputation pretrain task
+    use_raw_skip: bool = False     # if True, feed projected raw features as skip into every Switch layer
 
 
 # ---------------------------------------------------------------------------
@@ -138,11 +139,15 @@ class SwitchTransformerLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor):
+    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor, skip: torch.Tensor = None):
         # Causal self-attention (pre-norm)
         normed = self.norm1(x)
         attn_out, _ = self.self_attn(normed, normed, normed, attn_mask=causal_mask)
         x = x + self.dropout(attn_out)
+
+        # Inject raw-feature skip before Switch FFN
+        if skip is not None:
+            x = x + skip
 
         # Switch FFN (pre-norm)
         normed = self.norm2(x)
@@ -217,6 +222,7 @@ class Model(nn.Module):
         )
         self.input_norm = nn.LayerNorm(cfg.hidden_dim)
 
+
         # Alternating Dense / Switch transformer blocks
         self.layers = nn.ModuleList()
         for i in range(cfg.num_layers):
@@ -257,11 +263,15 @@ class Model(nn.Module):
         x, _ = self.lstm(x)                            # (B, T, hidden_dim)
         x = self.input_norm(x)                         # (B, T, d_model)
 
+        # LSTM output is held as skip, injected into every Switch layer if enabled
+        x_lstm = x if self.cfg.use_raw_skip else None
+
         causal_mask = self._causal_mask(x.shape[1], x.device)
 
         total_aux = x.new_zeros(())
         for layer in self.layers:
-            x, aux = layer(x, causal_mask)
+            skip = x_lstm if isinstance(layer, SwitchTransformerLayer) else None
+            x, aux = layer(x, causal_mask, skip=skip)
             total_aux = total_aux + aux
 
         return self.output_norm(x), total_aux
