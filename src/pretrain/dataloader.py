@@ -34,14 +34,22 @@ from sklearn.preprocessing import OrdinalEncoder
 
 SEQ_LEN = 30
 
-# Train/val split dates.
-# Electricity covers 2011-2014; use 2014-01-01 as val start and 2014-03-31 as val end.
-# M5 covers ~2011-06 to 2016-05; use the last ~10% of dates.
-# We apply a single global split across the combined dataset:
-#   train: date < 2014-01-01
-#   val:   2014-01-01 <= date < 2014-04-01
-TRAIN_END_DATE = "2014-01-01"
-VAL_END_DATE   = "2014-04-01"
+# Train/val split fractions (applied to the actual date range in the parquet).
+# 80% of dates → train, next 10% → val. The final 10% is held out (not used).
+TRAIN_FRAC = 0.80
+VAL_FRAC   = 0.10
+
+
+def _compute_split_dates(df: pd.DataFrame, date_col: str):
+    """Compute train/val cutoff dates from the actual date range in df."""
+    min_date = df[date_col].min()
+    max_date = df[date_col].max()
+    total_days = (max_date - min_date).days
+    train_end = min_date + pd.Timedelta(days=int(total_days * TRAIN_FRAC))
+    val_end   = min_date + pd.Timedelta(days=int(total_days * (TRAIN_FRAC + VAL_FRAC)))
+    print(f"  date range: {min_date.date()} → {max_date.date()} ({total_days} days)")
+    print(f"  train: < {train_end.date()},  val: [{train_end.date()}, {val_end.date()})")
+    return train_end, val_end
 
 
 def _make_columns() -> Columns:
@@ -57,25 +65,38 @@ def _make_columns() -> Columns:
     return Columns(cfg)
 
 
-def _build_encoder(columns: Columns, df: pd.DataFrame):
+def _build_encoder(columns: Columns, df: pd.DataFrame, train_end_date):
     """
     Encoder for pretrain data:
     - Categoricals: OrdinalEncoder (dataset_id and group_id are already integers,
       but OrdinalEncoder ensures 0-indexed contiguous codes for nn.Embedding).
     - Numericals / targets: PassThrough (already log1p-scaled).
     """
+    # 1. Create a categorical encoder wrapper around scikit-learn's OrdinalEncoder
+    # We use handle_unknown="use_encoded_value" and unknown_value=np.nan 
+    # so that any categories present in validation/test but NOT in training
+    # will be encoded as NaN (and safely dropped or handled later).
     cat_enc = Wrapper(
         OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan),
         columns.encoder_list(),
     )
+    
+    # 2. Build the main composite Encoder
+    # This orchestrates the transformations for different feature types:
     encoder = Encoder(
+        # Categorical columns get ordinal-encoded to 0, 1, 2... for embedding layers
         categorical_transformer=cat_enc,
+        # Numerical & target columns pass through unchanged (as they are already log1p scaled upstream)
         numerical_transformer=PassThrough(),
         target_transformer=PassThrough(),
     )
-    # Fit on train portion only
-    train_mask = df[columns.date()] < pd.to_datetime(TRAIN_END_DATE)
+    
+    # 3. Fit on train portion only
+    # It is critical to only .fit() on training data to prevent data leakage.
+    # The OrdinalEncoder will only "see" categories from the training set.
+    train_mask = df[columns.date()] < train_end_date
     encoder.fit(df[train_mask])
+    
     return encoder
 
 
@@ -109,6 +130,9 @@ def build_pretrain_dataloaders(batch_size: int, data_dir: str = "data/pretrain")
     df["group_id"]   = df["group_id"].astype(int)
     df["date"]       = pd.to_datetime(df["date"])
 
+    # Compute data-driven split dates
+    TRAIN_END_DATE, VAL_END_DATE = _compute_split_dates(df, columns.date())
+
     # Determine cat cardinalities before encoding
     n_datasets = df["dataset_id"].nunique()   # 2
     n_groups   = df["group_id"].nunique()     # ≥10 (M5 has 7, electricity has 10, merged ~17)
@@ -116,7 +140,7 @@ def build_pretrain_dataloaders(batch_size: int, data_dir: str = "data/pretrain")
     print(f"cat_card={cat_card}")
 
     print("Building encoder and transforming...")
-    encoder = _build_encoder(columns, df)
+    encoder = _build_encoder(columns, df, TRAIN_END_DATE)
     df_t = encoder.transform(df)
 
     # Drop rows where encoding produced NaN (unknown categories)
@@ -141,7 +165,7 @@ def build_pretrain_dataloaders(batch_size: int, data_dir: str = "data/pretrain")
     if len(train_ds) == 0 or len(val_ds) == 0:
         raise ValueError(
             f"Empty pretrain split: train={len(train_ds)}, val={len(val_ds)}. "
-            f"Check that parquet files cover dates before {VAL_END_DATE}."
+            f"Split dates: train_end={TRAIN_END_DATE.date()}, val_end={VAL_END_DATE.date()}."
         )
 
     train_loader = torch.utils.data.DataLoader(

@@ -75,7 +75,7 @@ The Kubeflow pipeline is a two-stage pretrain→finetune pipeline:
 1. **Pretrain** — trains the Switch Transformer backbone on M5 and UCI Electricity data (`src/train_pretrain.py`), producing `pretrain_backbone.pt`.
 2. **Finetune** — loads the pretrained backbone and fine-tunes on the target gas volume data (`src/train_switch.py`).
 
-Both stages run automatically when you call `run_kfp.sh`. By default, pretrain data is read from `gs://demand-vision/temp/peter/runs/pretrain_data`. To reuse a previously pre-trained backbone (skip the pretrain stage), pass its GCS path as a second argument:
+Both stages run automatically when you call `run_kfp.sh`. By default, pretrain data is read from `gs://demand-vision/temp/peter/pretrain_data`. To reuse a previously pre-trained backbone (skip the pretrain stage), pass its GCS path as a second argument:
 
 ```bash
 bash run_kfp.sh {experiment_name} gs://demand-vision/temp/{user}/runs/{pretrain_run}/pretrain

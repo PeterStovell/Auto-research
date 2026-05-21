@@ -55,13 +55,16 @@ def get_slice_indexes(sequence_list:list[dict], length, start_date=None, end_dat
     """
     Extract from a list of sequences all the valid slice indexes given the desired length and dates.
     """
-    start_date = pd.to_datetime(start_date)
-    end_date = pd.to_datetime(end_date)
+    if start_date is not None:
+        start_date = pd.to_datetime(start_date)
+    if end_date is not None:
+        end_date = pd.to_datetime(end_date)
+
     slice_indexes = []
     for i in range(0, len(sequence_list)):
         dates = sequence_list[i]['date']
         for j in range(0, len(dates) - length + 1):
-            last_date = dates[j + length - 1]
+            last_date = pd.to_datetime(dates[j + length - 1])
             if (start_date is None or last_date >= start_date) and (end_date is None or last_date < end_date):
                 slice_indexes.append((i, j, j + length))
     return slice_indexes
