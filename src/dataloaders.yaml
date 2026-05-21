@@ -18,6 +18,13 @@ columns:
   # raw volume
   - NET_QTY
   - y_volume_t1
+  # regime features (computed by features.add_regime_features at load time)
+  - roll_std_7
+  - roll_std_21
+  - trend_7
+  - roll_spread
+  - roll_autocorr_21
+  - realized_vol_fwd21
   # short-range rolling sums
   #- volume_2D
   #- volume_3D

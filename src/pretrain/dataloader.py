@@ -30,6 +30,7 @@ from columns import Columns
 from encoder import Encoder, Wrapper, PassThrough
 from sampler import dataframe_to_sequence_list, SliceDataset
 from sklearn.preprocessing import OrdinalEncoder
+from features import add_regime_features, REGIME_FEATURE_COLS
 
 
 SEQ_LEN = 30
@@ -58,7 +59,7 @@ def _make_columns() -> Columns:
         "date": "date",
         "sequence": "sequence",
         "categoricals": ["dataset_id", "group_id"],
-        "numericals": ["value", "value_lag1"],
+        "numericals": ["value", "value_lag1"] + REGIME_FEATURE_COLS,
         "targets": ["target"],
         "scaling": [],  # no group-scaling column needed
     })
@@ -133,6 +134,9 @@ def build_pretrain_dataloaders(batch_size: int, data_dir: str = "data/pretrain")
     # Compute data-driven split dates
     TRAIN_END_DATE, VAL_END_DATE = _compute_split_dates(df, columns.date())
 
+    print("Adding regime features...")
+    add_regime_features(df, value_col='value', seq_col='sequence')
+
     # Determine cat cardinalities before encoding
     n_datasets = df["dataset_id"].nunique()   # 2
     n_groups   = df["group_id"].nunique()     # ≥10 (M5 has 7, electricity has 10, merged ~17)
@@ -175,4 +179,5 @@ def build_pretrain_dataloaders(batch_size: int, data_dir: str = "data/pretrain")
         val_ds, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=0,
     )
 
-    return train_loader, val_loader, cat_card, 2, 1
+    n_num = len(columns.numericals())  # 2 base + len(REGIME_FEATURE_COLS)
+    return train_loader, val_loader, cat_card, n_num, 1
