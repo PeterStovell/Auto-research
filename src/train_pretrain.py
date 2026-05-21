@@ -46,6 +46,8 @@ def main():
     trainer_cfg = OmegaConf.structured(TrainerConfig())
     model_cfg = OmegaConf.structured(ModelConfig())
 
+    trainer_cfg.max_steps = 20
+    trainer_cfg.max_epochs = 1
     if args.max_epochs is not None:
         trainer_cfg.max_epochs = args.max_epochs
     if args.batch_size is not None:
@@ -73,7 +75,10 @@ def main():
     os.makedirs(args.output, exist_ok=True)
 
     print("Pre-training model...")
-    metrics = train_model(model, train_loader, val_loader, trainer_cfg, device, args.output)
+    metrics = train_model(
+        model, train_loader, val_loader, trainer_cfg, device, args.output,
+        loss_fn=lambda batch: model.compute_pretrain_loss(batch, device),
+    )
 
     metrics_df = pd.DataFrame(metrics)
     metrics_indexed = metrics_df.set_index("epoch")

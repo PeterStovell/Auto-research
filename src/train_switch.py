@@ -1,5 +1,6 @@
 import os
 import math
+import time
 import argparse
 import sys
 import random
@@ -21,7 +22,10 @@ class TrainerConfig:
     batch_size: int = 48
     lr: float = 0.001
     patience: int = 15
+    min_delta: float = 0.0001
     max_epochs: int = 50
+    max_seconds: float = -1.0
+    max_steps: int = -1
     weight_decay: float = 0.0
     max_norm: float = 1.0
 
@@ -29,13 +33,16 @@ class TrainerConfig:
 @dataclass
 class ModelConfig:
     hidden_dim: int = 64      # d_model / transformer width
-    num_layers: int = 2         # number of Switch Transformer layers
+    num_layers: int = 4         # number of transformer blocks (must be even: Dense/Switch alternating)
+    lstm_layers: int = 2        # LSTM layers before the transformer stack
     num_heads: int = 4          # multi-head attention heads
     num_experts: int = 8        # regime experts per Switch FFN layer
     ffn_dim: int = 128          # hidden dim inside each expert FFN
     capacity_factor: float = 1.25  # overflow buffer for expert dispatch
     dropout: float = 0.1
-    aux_loss_weight: float = 0.1  # weight for load-balancing auxiliary loss
+    aux_loss_weight: float = 0.1   # weight for load-balancing auxiliary loss
+    multistep_steps: int = 3       # steps ahead for multi-step forecast pretrain task
+    impute_mask_ratio: float = 0.15  # fraction of timesteps masked for imputation pretrain task
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +152,32 @@ class SwitchTransformerLayer(nn.Module):
         return x, aux_loss
 
 
+class DenseTransformerLayer(nn.Module):
+    """One block: causal self-attention + plain dense FFN, pre-LayerNorm."""
+
+    def __init__(self, d_model: int, num_heads: int, ffn_dim: int, dropout: float):
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(
+            d_model, num_heads, dropout=dropout, batch_first=True
+        )
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, ffn_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(ffn_dim, d_model),
+        )
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor):
+        normed = self.norm1(x)
+        attn_out, _ = self.self_attn(normed, normed, normed, attn_mask=causal_mask)
+        x = x + self.dropout(attn_out)
+        x = x + self.ffn(self.norm2(x))
+        return x, x.new_zeros(())
+
+
 # ---------------------------------------------------------------------------
 # Full model
 # ---------------------------------------------------------------------------
@@ -174,25 +207,39 @@ class Model(nn.Module):
             for card, emb_dim in zip(cat_card, emb_dims)
         ])
 
-        # Project raw features → d_model
-        self.input_proj = nn.Linear(input_dim, cfg.hidden_dim)
+        # LSTM input layer: captures immediate sequential dependencies
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=cfg.hidden_dim,
+            num_layers=cfg.lstm_layers,
+            batch_first=True,
+            dropout=cfg.dropout if cfg.lstm_layers > 1 else 0.0,
+        )
         self.input_norm = nn.LayerNorm(cfg.hidden_dim)
 
-        # Switch Transformer layers
-        self.layers = nn.ModuleList([
-            SwitchTransformerLayer(
-                d_model=cfg.hidden_dim,
-                num_heads=cfg.num_heads,
-                ffn_dim=cfg.ffn_dim,
-                num_experts=cfg.num_experts,
-                capacity_factor=cfg.capacity_factor,
-                dropout=cfg.dropout,
-            )
-            for _ in range(cfg.num_layers)
-        ])
+        # Alternating Dense / Switch transformer blocks
+        self.layers = nn.ModuleList()
+        for i in range(cfg.num_layers):
+            if i % 2 == 0:
+                self.layers.append(DenseTransformerLayer(
+                    d_model=cfg.hidden_dim,
+                    num_heads=cfg.num_heads,
+                    ffn_dim=cfg.ffn_dim,
+                    dropout=cfg.dropout,
+                ))
+            else:
+                self.layers.append(SwitchTransformerLayer(
+                    d_model=cfg.hidden_dim,
+                    num_heads=cfg.num_heads,
+                    ffn_dim=cfg.ffn_dim,
+                    num_experts=cfg.num_experts,
+                    capacity_factor=cfg.capacity_factor,
+                    dropout=cfg.dropout,
+                ))
 
         self.output_norm = nn.LayerNorm(cfg.hidden_dim)
         self.linear = nn.Linear(cfg.hidden_dim, n_target)
+        self.multistep_head = nn.Linear(cfg.hidden_dim, cfg.multistep_steps)
 
     def _causal_mask(self, seq_len: int, device) -> torch.Tensor:
         """Additive float mask: future positions get -inf, past/current get 0."""
@@ -202,12 +249,13 @@ class Model(nn.Module):
         )
         return mask
 
-    def _forward_internal(self, cat: torch.Tensor, num: torch.Tensor):
-        # Embed categoricals and concatenate with numericals
+    def _encode(self, cat: torch.Tensor, num: torch.Tensor):
+        """Returns hidden states (B, T, d_model) and aux_loss."""
         x = [emb(cat[..., i]) for i, emb in enumerate(self.embeddings)]
         x = torch.cat(x + [num], dim=-1)               # (B, T, input_dim)
 
-        x = self.input_norm(self.input_proj(x))         # (B, T, d_model)
+        x, _ = self.lstm(x)                            # (B, T, hidden_dim)
+        x = self.input_norm(x)                         # (B, T, d_model)
 
         causal_mask = self._causal_mask(x.shape[1], x.device)
 
@@ -216,9 +264,12 @@ class Model(nn.Module):
             x, aux = layer(x, causal_mask)
             total_aux = total_aux + aux
 
-        x = self.output_norm(x)
-        pred = F.softplus(self.linear(x))               # (B, T, n_target)
-        return pred, total_aux
+        return self.output_norm(x), total_aux
+
+    def _forward_internal(self, cat: torch.Tensor, num: torch.Tensor):
+        h, aux = self._encode(cat, num)
+        pred = F.softplus(self.linear(h))               # (B, T, n_target)
+        return pred, aux
 
     def forward(self, cat: torch.Tensor, num: torch.Tensor) -> torch.Tensor:
         pred, _ = self._forward_internal(cat, num)
@@ -230,6 +281,34 @@ class Model(nn.Module):
         pred, aux_loss = self._forward_internal(cat, num)
         main_loss = torch.abs(pred - target).mean()
         return main_loss + self.cfg.aux_loss_weight * aux_loss
+
+    def compute_pretrain_loss(self, batch, device):
+        """Joint imputation + multi-step forecast loss for pretrain stage."""
+        date, seq, cat, num, target = batch
+        cat, num, target = cat.to(device), num.to(device), target.to(device)
+        B, T, _ = num.shape
+
+        # Task 1: Imputation — mask random timesteps, predict target at all positions
+        mask = torch.rand(B, T, device=device) < self.cfg.impute_mask_ratio
+        num_masked = num.clone()
+        num_masked[mask.unsqueeze(-1).expand_as(num)] = 0.0
+        h_imp, aux1 = self._encode(cat, num_masked)
+        impute_loss = torch.abs(F.softplus(self.linear(h_imp)) - target).mean()
+
+        # Task 2: Multi-step forecast — at position t predict target[t+1..t+k]
+        k = self.cfg.multistep_steps
+        h_ms, aux2 = self._encode(cat, num)
+        ms_pred = F.softplus(self.multistep_head(h_ms))  # (B, T, k)
+        if T > k:
+            ms_target = torch.stack(
+                [target[:, s:T - k + s, 0] for s in range(1, k + 1)], dim=-1
+            )  # (B, T-k, k)
+            ms_loss = torch.abs(ms_pred[:, :T - k, :] - ms_target).mean()
+        else:
+            ms_loss = ms_pred.new_zeros(())
+
+        aux_loss = (aux1 + aux2) / 2
+        return impute_loss + ms_loss + self.cfg.aux_loss_weight * aux_loss
 
     def compute_eval_loss(self, batch, device):
         date, seq, cat, num, target = batch
@@ -245,13 +324,15 @@ class Model(nn.Module):
 # ---------------------------------------------------------------------------
 
 def run_epoch_train(model, dataloader, optimizer, trainer_cfg, device,
-                    ema_state=None, ema_decay=0.999, diag_logger=None):
+                    ema_state=None, ema_decay=0.999, diag_logger=None, loss_fn=None):
+    if loss_fn is None:
+        loss_fn = lambda batch: model.compute_train_loss(batch, device=device)
     total_loss = 0.
     n = 0
     model.train()
 
     for batch in dataloader:
-        loss = model.compute_train_loss(batch, device=device)
+        loss = loss_fn(batch)
 
         optimizer.zero_grad()
         loss.backward()
@@ -273,6 +354,10 @@ def run_epoch_train(model, dataloader, optimizer, trainer_cfg, device,
 
         total_loss += loss.item()
         n += 1
+        if trainer_cfg.max_steps > 0 and n >= trainer_cfg.max_steps:
+            break
+        if n % 500 == 0:
+            print(f"  step {n} loss={total_loss/n:.5f}", flush=True)
 
     return total_loss / max(n, 1)
 
@@ -291,7 +376,7 @@ def run_epoch_eval(model, dataloader, device='cpu'):
     return total_loss / max(n, 1)
 
 
-def train_model(model, train_loader, val_loader, trainer_cfg, device, output_path):
+def train_model(model, train_loader, val_loader, trainer_cfg, device, output_path, loss_fn=None):
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=trainer_cfg.lr,
@@ -304,16 +389,17 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
 
     best_val = float("inf")
     patience_left = trainer_cfg.patience
+    t_start = time.time()
     best_path = os.path.join(output_path, "best_model.pt")
     metrics = []
 
-    diag_logger = DiagnosticLogger(model, os.path.join(output_path, 'diagnostics.jsonl'))
-    diag_batch = next(iter(val_loader))  # fixed batch for consistent diagnostic snapshots
+    # diag_logger = DiagnosticLogger(model, os.path.join(output_path, 'diagnostics.jsonl'))
+    # diag_batch = next(iter(val_loader))  # fixed batch for consistent diagnostic snapshots
 
     for epoch in range(trainer_cfg.max_epochs):
         train_loss = run_epoch_train(
             model, train_loader, optimizer, trainer_cfg, device,
-            ema_state=ema_state, ema_decay=ema_decay, diag_logger=diag_logger,
+            ema_state=ema_state, ema_decay=ema_decay, loss_fn=loss_fn,
         )
 
         backup = {k: v.clone() for k, v in model.state_dict().items()}
@@ -321,11 +407,11 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
         val_loss = run_epoch_eval(model, val_loader, device)
 
         # diagnostic snapshot using EMA model on the fixed val batch
-        date, seq, cat, num, target = diag_batch
-        cat, num, target = cat.to(device), num.to(device), target.to(device)
-        with torch.no_grad():
-            pred = model(cat, num)
-        diag_logger.compute_and_log(epoch, pred[:, -1, :], target[:, -1, :])
+        # date, seq, cat, num, target = diag_batch
+        # cat, num, target = cat.to(device), num.to(device), target.to(device)
+        # with torch.no_grad():
+        #     pred = model(cat, num)
+        # diag_logger.compute_and_log(epoch, pred[:, -1, :], target[:, -1, :])
 
         model.load_state_dict(backup)
 
@@ -341,7 +427,11 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
 
         metrics.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss, "lr": last_lr})
 
-        if val_loss < best_val:
+        if trainer_cfg.max_seconds > 0 and time.time() - t_start > trainer_cfg.max_seconds:
+            print(f"Time limit reached ({trainer_cfg.max_seconds}s), stopping pretrain")
+            break
+
+        if val_loss < best_val - trainer_cfg.min_delta:
             print('*')
             best_val = val_loss
             patience_left = trainer_cfg.patience
@@ -352,11 +442,11 @@ def train_model(model, train_loader, val_loader, trainer_cfg, device, output_pat
                 print("Early stopping triggered")
                 break
 
-    diag_logger.remove_hooks()
-    plot_all(
-        os.path.join(output_path, 'diagnostics.jsonl'),
-        os.path.join(output_path, 'diagnostics'),
-    )
+    # diag_logger.remove_hooks()
+    # plot_all(
+    #     os.path.join(output_path, 'diagnostics.jsonl'),
+    #     os.path.join(output_path, 'diagnostics'),
+    # )
 
     model.load_state_dict(torch.load(best_path))
     return metrics
