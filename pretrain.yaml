@@ -8,7 +8,7 @@ inputs:
 
 implementation:
   container:
-    image: gcr.io/dev-stovell-ai/pytorch-research/auto-research@sha256:5a4073b4d0a4df565c1856fd911e3cb42ace528c70969afe75cb78558a919e1f
+    image: gcr.io/dev-stovell-ai/pytorch-research/auto-research@sha256:a1ef525b0fc68715a4c8502ae03829567c0e681e8bea28cdb4cba8183fa4d4a5
     command:
       - python3
       - entrypoint.py
