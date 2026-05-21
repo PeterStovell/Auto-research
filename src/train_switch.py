@@ -175,7 +175,7 @@ class DenseTransformerLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor):
+    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor, skip=None):
         normed = self.norm1(x)
         attn_out, _ = self.self_attn(normed, normed, normed, attn_mask=causal_mask)
         x = x + self.dropout(attn_out)
