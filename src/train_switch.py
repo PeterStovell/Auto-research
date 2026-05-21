@@ -43,7 +43,7 @@ class ModelConfig:
     aux_loss_weight: float = 0.1   # weight for load-balancing auxiliary loss
     multistep_steps: int = 3       # steps ahead for multi-step forecast pretrain task
     impute_mask_ratio: float = 0.15  # fraction of timesteps masked for imputation pretrain task
-    use_raw_skip: bool = False     # if True, feed projected raw features as skip into every Switch layer
+    use_raw_skip: bool = True      # if True, feed LSTM output as skip into every Switch layer
 
 
 # ---------------------------------------------------------------------------
