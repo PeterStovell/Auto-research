@@ -46,8 +46,8 @@ def main():
     trainer_cfg = OmegaConf.structured(TrainerConfig())
     model_cfg = OmegaConf.structured(ModelConfig())
 
-    trainer_cfg.max_steps = 20
-    trainer_cfg.max_epochs = 1
+    trainer_cfg.max_steps = 1000
+    trainer_cfg.max_epochs = 5
     if args.max_epochs is not None:
         trainer_cfg.max_epochs = args.max_epochs
     if args.batch_size is not None:
